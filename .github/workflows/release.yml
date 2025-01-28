@@ -1,0 +1,125 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and Release
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go-version: [1.21.x]
+        include:
+          - os: ubuntu-latest
+            output-name: sagemaker-monitor-linux
+          - os: macos-latest
+            output-name: sagemaker-monitor-darwin
+          - os: windows-latest
+            output-name: sagemaker-monitor-windows.exe
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: go mod tidy
+
+    - name: Build
+      env:
+        CGO_ENABLED: 0
+      run: |
+        if [ "${{ matrix.os }}" == "windows-latest" ]; then
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ${{ matrix.output-name }}
+        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${{ matrix.output-name }}
+        else
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ${{ matrix.output-name }}
+        fi
+
+    - name: Create Release Configs Directory
+      run: mkdir -p release/configs
+
+    - name: Copy Pricing Config
+      run: cp configs/pricing.yaml release/configs/
+
+    - name: Package Artifact
+      run: |
+        mkdir -p release/bin
+        cp ${{ matrix.output-name }} release/bin/
+        cp README.md release/
+        cp LICENSE release/
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.output-name }}
+        path: release/
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Download Artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          **/bin/sagemaker-monitor-linux
+          **/bin/sagemaker-monitor-darwin
+          **/bin/sagemaker-monitor-windows.exe
+          **/configs/pricing.yaml
+          **/README.md
+          **/LICENSE
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ secrets.DOCKERHUB_USERNAME }}/sagemaker-monitor:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/sagemaker-monitor:${{ github.ref_name }}
+        platforms: linux/amd64,linux/arm64
