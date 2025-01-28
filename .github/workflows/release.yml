@@ -44,17 +44,48 @@ jobs:
     - name: Install dependencies
       run: go mod tidy
 
-    - name: Build
+    - name: Install UPX (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install -y upx-ucl
+
+    - name: Install UPX (macOS)
+      if: matrix.os == 'macos-latest'
+      run: brew install upx
+
+    - name: Install UPX (Windows)
+      if: matrix.os == 'windows-latest'
+      run: choco install upx
+
+    - name: Build (Windows)
+      if: matrix.os == 'windows-latest'
+      env:
+        CGO_ENABLED: 0
+      shell: bash
+      run: |
+        VERSION=$(git describe --tags --always)
+        COMMIT=$(git rev-parse HEAD)
+        BUILD_DATE=$(date -u '+%Y-%m-%d')
+        LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}"
+        GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
+        upx --best --lzma ${{ matrix.output-name }}
+
+    - name: Build (Unix)
+      if: matrix.os != 'windows-latest'
       env:
         CGO_ENABLED: 0
       run: |
-        if [ "${{ matrix.os }}" == "windows-latest" ]; then
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ${{ matrix.output-name }}
-        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${{ matrix.output-name }}
+        VERSION=$(git describe --tags --always)
+        COMMIT=$(git rev-parse HEAD)
+        BUILD_DATE=$(date -u '+%Y-%m-%d')
+        LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}"
+        
+        if [ "${{ matrix.os }}" == "macos-latest" ]; then
+          GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
         else
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ${{ matrix.output-name }}
+          GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
         fi
+        
+        upx --best --lzma ${{ matrix.output-name }}
 
     - name: Create Release Configs Directory
       run: mkdir -p release/configs
