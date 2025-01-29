@@ -3,11 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-
+	"time"
 	"github.com/spf13/cobra"
-	"mohua/internal/cost"
 	"mohua/internal/display"
 	"mohua/internal/sagemaker"
 )
@@ -43,20 +40,6 @@ func runMinimalMonitor() error {
 		return fmt.Errorf("failed to create SageMaker client: %w", err)
 	}
 
-	// Load pricing data
-	execPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-	pricingPath := filepath.Join(filepath.Dir(execPath), "configs", "pricing.yaml")
-	pricing, err := cost.LoadPricing(pricingPath)
-	if err != nil {
-		return fmt.Errorf("failed to load pricing data: %w", err)
-	}
-
-	// Create cost calculator
-	calculator := cost.NewCalculator(pricing)
-
 	// Create printer
 	printer := display.NewPrinter(jsonOutput)
 
@@ -68,22 +51,12 @@ func runMinimalMonitor() error {
 		fmt.Printf("Warning: Failed to list endpoints: %v\n", err)
 	}
 	for _, endpoint := range endpoints {
-		cost := calculator.CalculateEndpointCost(
-			endpoint.Name,
-			endpoint.InstanceType,
-			endpoint.InstanceCount,
-			endpoint.CreationTime,
-		)
 		printer.AddResource(display.ResourceInfo{
 			ResourceType:  "Endpoint",
-			Name:         cost.ResourceName,
+			Name:         endpoint.Name,
 			Status:       endpoint.Status,
-			InstanceType: cost.InstanceType,
-			RunningTime:  cost.RunningTime.String(),
-			HourlyCost:   cost.HourlyCost,
-			CurrentCost:  cost.CurrentCost,
-			ProjectedCost: cost.ProjectedCost,
-			TotalCost:    cost.CurrentCost,
+			InstanceType: endpoint.InstanceType,
+			RunningTime:  time.Since(endpoint.CreationTime).String(),
 		})
 	}
 
@@ -93,23 +66,12 @@ func runMinimalMonitor() error {
 		fmt.Printf("Warning: Failed to list notebooks: %v\n", err)
 	}
 	for _, notebook := range notebooks {
-		cost := calculator.CalculateNotebookCost(
-			notebook.Name,
-			notebook.InstanceType,
-			notebook.CreationTime,
-			notebook.VolumeSize,
-		)
 		printer.AddResource(display.ResourceInfo{
 			ResourceType:  "Notebook",
-			Name:         cost.ResourceName,
+			Name:         notebook.Name,
 			Status:       notebook.Status,
-			InstanceType: cost.InstanceType,
-			RunningTime:  cost.RunningTime.String(),
-			HourlyCost:   cost.HourlyCost,
-			CurrentCost:  cost.CurrentCost,
-			ProjectedCost: cost.ProjectedCost,
-			StorageCost:  cost.StorageCost,
-			TotalCost:    cost.CurrentCost + cost.StorageCost,
+			InstanceType: notebook.InstanceType,
+			RunningTime:  time.Since(notebook.CreationTime).String(),
 		})
 	}
 
@@ -118,22 +80,13 @@ func runMinimalMonitor() error {
 	if err != nil {
 		fmt.Printf("Warning: Failed to list Studio apps: %v\n", err)
 	}
-	for _, app := range apps {
-		cost := calculator.CalculateStudioCost(
-			fmt.Sprintf("%s/%s", app.UserProfile, app.AppType),
-			app.InstanceType,
-			app.CreationTime,
-		)
+	for _, app := range apps {	
 		printer.AddResource(display.ResourceInfo{
 			ResourceType:  "Studio",
-			Name:         cost.ResourceName,
+			Name:         fmt.Sprintf("%s/%s", app.UserProfile, app.AppType),
 			Status:       app.Status,
-			InstanceType: cost.InstanceType,
-			RunningTime:  cost.RunningTime.String(),
-			HourlyCost:   cost.HourlyCost,
-			CurrentCost:  cost.CurrentCost,
-			ProjectedCost: cost.ProjectedCost,
-			TotalCost:    cost.CurrentCost,
+			InstanceType: app.InstanceType,
+			RunningTime:  time.Since(app.CreationTime).String(),
 		})
 	}
 
