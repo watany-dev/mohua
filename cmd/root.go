@@ -3,11 +3,18 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 	"github.com/spf13/cobra"
 	"mohua/internal/display"
 	"mohua/internal/sagemaker"
 )
+
+// ResourceResult holds the results and errors from API calls
+type ResourceResult struct {
+	Resources []sagemaker.ResourceInfo
+	Error     error
+}
 
 var (
 	region    string
@@ -42,22 +49,58 @@ func runMonitor() error {
 
 	ctx := context.Background()
 
-	// Track if any resources were found
+	// Create channels for each resource type
+	endpointsChan := make(chan ResourceResult, 1)
+	notebooksChan := make(chan ResourceResult, 1)
+	appsChan := make(chan ResourceResult, 1)
+
+	// Launch goroutines for each API call
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		endpoints, err := client.ListEndpoints(ctx)
+		endpointsChan <- ResourceResult{Resources: endpoints, Error: err}
+	}()
+
+	go func() {
+		defer wg.Done()
+		notebooks, err := client.ListNotebooks(ctx)
+		notebooksChan <- ResourceResult{Resources: notebooks, Error: err}
+	}()
+
+	go func() {
+		defer wg.Done()
+		apps, err := client.ListStudioApps(ctx)
+		appsChan <- ResourceResult{Resources: apps, Error: err}
+	}()
+
+	// Close channels after all goroutines complete
+	go func() {
+		wg.Wait()
+		close(endpointsChan)
+		close(notebooksChan)
+		close(appsChan)
+	}()
+
+	// Track if any resources were found and collect errors
 	resourceFound := false
 	var printer *display.Printer
+	var firstError error
 
-	// Get endpoints
-	endpoints, err := client.ListEndpoints(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list SageMaker resources: %w", err)
-	}
-	if len(endpoints) > 0 {
-		// Create printer only when first resource is found
-		printer = display.NewPrinter(jsonOutput)
-		printer.PrintHeader()
-		resourceFound = true
-
-		for _, endpoint := range endpoints {
+	// Process endpoints
+	if result := <-endpointsChan; result.Error != nil {
+		if firstError == nil {
+			firstError = fmt.Errorf("failed to list endpoints: %w", result.Error)
+		}
+	} else if len(result.Resources) > 0 {
+		if !resourceFound {
+			printer = display.NewPrinter(jsonOutput)
+			printer.PrintHeader()
+			resourceFound = true
+		}
+		for _, endpoint := range result.Resources {
 			printer.PrintResource(display.ResourceInfo{
 				ResourceType:  "Endpoint",
 				Name:         endpoint.Name,
@@ -68,20 +111,18 @@ func runMonitor() error {
 		}
 	}
 
-	// Get notebooks
-	notebooks, err := client.ListNotebooks(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list SageMaker resources: %w", err)
-	}
-	if len(notebooks) > 0 {
-		// Create printer only when first resource is found
+	// Process notebooks
+	if result := <-notebooksChan; result.Error != nil {
+		if firstError == nil {
+			firstError = fmt.Errorf("failed to list notebooks: %w", result.Error)
+		}
+	} else if len(result.Resources) > 0 {
 		if !resourceFound {
 			printer = display.NewPrinter(jsonOutput)
 			printer.PrintHeader()
 			resourceFound = true
 		}
-
-		for _, notebook := range notebooks {
+		for _, notebook := range result.Resources {
 			printer.PrintResource(display.ResourceInfo{
 				ResourceType:  "Notebook",
 				Name:         notebook.Name,
@@ -92,20 +133,18 @@ func runMonitor() error {
 		}
 	}
 
-	// Get Studio apps
-	apps, err := client.ListStudioApps(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list SageMaker resources: %w", err)
-	}
-	if len(apps) > 0 {
-		// Create printer only when first resource is found
+	// Process Studio apps
+	if result := <-appsChan; result.Error != nil {
+		if firstError == nil {
+			firstError = fmt.Errorf("failed to list studio apps: %w", result.Error)
+		}
+	} else if len(result.Resources) > 0 {
 		if !resourceFound {
 			printer = display.NewPrinter(jsonOutput)
 			printer.PrintHeader()
 			resourceFound = true
 		}
-
-		for _, app := range apps {	
+		for _, app := range result.Resources {
 			printer.PrintResource(display.ResourceInfo{
 				ResourceType:  "Studio",
 				Name:         fmt.Sprintf("%s/%s", app.UserProfile, app.AppType),
@@ -114,6 +153,11 @@ func runMonitor() error {
 				RunningTime:  time.Since(app.CreationTime).String(),
 			})
 		}
+	}
+
+	// Return first error encountered if any
+	if firstError != nil {
+		return firstError
 	}
 
 	// If no resources found, return an error
