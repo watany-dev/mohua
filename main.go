@@ -14,7 +14,11 @@ var (
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		// NoResourcesError because the message is already displayed,
+		// skip displaying additional messages
+		if _, ok := err.(*cmd.NoResourcesError); !ok {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		}
 		os.Exit(1)
 	}
 }

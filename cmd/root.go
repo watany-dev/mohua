@@ -11,6 +11,15 @@ import (
 	"mohua/internal/sagemaker"
 )
 
+type NoResourcesError struct{}
+
+func (e *NoResourcesError) Error() string {
+	return "No SageMaker resources found in the specified region. Please verify:\n" +
+		"- AWS credentials are correctly configured\n" +
+		"- You have permission to access SageMaker resources\n" +
+		"- The specified region contains SageMaker resources"
+}
+
 // ResourceResult holds the results and errors from API calls
 type ResourceResult struct {
 	Resources []sagemaker.ResourceInfo
@@ -29,6 +38,7 @@ var rootCmd = &cobra.Command{
 	Long: `A monitoring tool for AWS SageMaker that helps track running compute resources
 and their associated costs.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SilenceUsage = true
 		return runMonitor()
 	},
 }
@@ -49,6 +59,15 @@ func runMonitor() error {
 	}
 
 	ctx := context.Background()
+
+	// Validate AWS configuration and check if resources are likely to exist
+	hasConfiguredResources, err := client.ValidateConfiguration(ctx)
+	if err != nil {
+		return fmt.Errorf("configuration validation failed: %w", err)
+	}
+	if !hasConfiguredResources {
+		return &NoResourcesError{}
+	}
 
 	// Create channels for each resource type
 	endpointsChan := make(chan ResourceResult, 1)
@@ -179,9 +198,9 @@ func runMonitor() error {
 		return firstError
 	}
 
-	// If no resources found, return an error
+	// If no resources found, return a NoResourcesError
 	if !resourceFound {
-		return fmt.Errorf("no SageMaker resources found")
+		return &NoResourcesError{}
 	}
 
 	// Print footer
