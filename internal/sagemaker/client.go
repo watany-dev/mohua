@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker"
+	"github.com/aws/aws-sdk-go-v2/service/sagemaker/types"
 )
 
 // Client represents a SageMaker client with methods to fetch resource information
@@ -51,6 +52,16 @@ type StudioInfo struct {
 	DomainID     string
 	UserProfile  string
 	AppType      string
+	InstanceType string
+	Status       string
+	CreationTime time.Time
+}
+
+// CanvasInfo contains information about a SageMaker Canvas application
+type CanvasInfo struct {
+	Name         string
+	DomainID     string
+	UserProfile  string
 	InstanceType string
 	Status       string
 	CreationTime time.Time
@@ -178,4 +189,66 @@ func (c *Client) ListStudioApps(ctx context.Context) ([]StudioInfo, error) {
 	}
 
 	return apps, nil
+}
+
+// ListCanvasApps returns information about all SageMaker Canvas applications
+func (c *Client) ListCanvasApps(ctx context.Context) ([]CanvasInfo, error) {
+	var canvasApps []CanvasInfo
+	paginator := sagemaker.NewListDomainsPaginator(c.sagemaker, &sagemaker.ListDomainsInput{})
+
+	for paginator.HasMorePages() {
+		domains, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list domains: %w", err)
+		}
+
+		for _, domain := range domains.Domains {
+			userPaginator := sagemaker.NewListUserProfilesPaginator(c.sagemaker, &sagemaker.ListUserProfilesInput{
+				DomainIdEquals: domain.DomainId,
+			})
+
+			for userPaginator.HasMorePages() {
+				users, err := userPaginator.NextPage(ctx)
+				if err != nil {
+					continue
+				}
+
+				for _, user := range users.UserProfiles {
+					// Filter apps manually since ListAppsInput doesn't support direct AppType filtering
+					appPaginator := sagemaker.NewListAppsPaginator(c.sagemaker, &sagemaker.ListAppsInput{
+						DomainIdEquals:        domain.DomainId,
+						UserProfileNameEquals: user.UserProfileName,
+					})
+
+					for appPaginator.HasMorePages() {
+						appOutput, err := appPaginator.NextPage(ctx)
+						if err != nil {
+							continue
+						}
+
+						for _, app := range appOutput.Apps {
+							// Only add Canvas apps
+							if app.AppType == types.AppTypeCanvas {
+								var instanceType string
+								if app.ResourceSpec != nil {
+									instanceType = string(app.ResourceSpec.InstanceType)
+								}
+
+								canvasApps = append(canvasApps, CanvasInfo{
+									Name:         *app.AppName,
+									DomainID:     *domain.DomainId,
+									UserProfile:  *user.UserProfileName,
+									InstanceType: instanceType,
+									Status:       string(app.Status),
+									CreationTime: *app.CreationTime,
+								})
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return canvasApps, nil
 }
