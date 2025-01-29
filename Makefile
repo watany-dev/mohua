@@ -17,9 +17,26 @@ LDFLAGS=-s -w
 # Default target
 all: test build
 
-# Build the application
-build:
-	$(GOBUILD) -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) $(SRC_DIR)
+# Install UPX if not present
+install-upx:
+	@if ! command -v upx >/dev/null 2>&1; then \
+		if [ "$$(uname)" = "Darwin" ]; then \
+			brew install upx; \
+		elif [ "$$(uname)" = "Linux" ]; then \
+			sudo apt-get update && sudo apt-get install -y upx-ucl; \
+		else \
+			echo "Please install UPX manually on Windows using: choco install upx"; \
+			exit 1; \
+		fi \
+	fi
+
+# Build the binary with optimizations
+build: install-upx
+	@echo "Building optimized binary..."
+	CGO_ENABLED=0 $(GOBUILD) -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) $(SRC_DIR)
+	@echo "Compressing with UPX..."
+	upx --best --lzma $(BINARY_NAME)
+	@echo "Build complete"
 
 # Run tests
 test:
