@@ -11,7 +11,6 @@ import (
 	"mohua/internal/sagemaker"
 )
 
-// NoResourcesError is returned when no SageMaker resources are found
 type NoResourcesError struct{}
 
 func (e *NoResourcesError) Error() string {
