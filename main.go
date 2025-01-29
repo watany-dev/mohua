@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"mohua/cmd"
+	"os"
 )
 
 var (
