@@ -2,6 +2,7 @@ package sagemaker
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -10,6 +11,25 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker/types"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestNewMinimalClient(t *testing.T) {
+	// Test with explicit region
+	client, err := NewMinimalClient("us-west-2")
+	assert.NoError(t, err)
+	assert.NotNil(t, client)
+
+	// Test with empty region (should use AWS SDK's default region resolution)
+	client, err = NewMinimalClient("")
+	assert.NoError(t, err)
+	assert.NotNil(t, client)
+
+	// Test with AWS_REGION environment variable
+	os.Setenv("AWS_REGION", "us-east-1")
+	client, err = NewMinimalClient("")
+	assert.NoError(t, err)
+	assert.NotNil(t, client)
+	os.Unsetenv("AWS_REGION")
+}
 
 // MockSageMakerClient provides a mock implementation of the SageMaker client
 type MockSageMakerClient struct {

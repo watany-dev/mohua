@@ -30,9 +30,8 @@ and their associated costs.`,
 
 // ExecuteMinimal adds all child commands to the root command and sets flags appropriately.
 func ExecuteMinimal() error {
-	minimalRootCmd.PersistentFlags().StringVarP(&region, "region", "r", "", "AWS region (required)")
+	minimalRootCmd.PersistentFlags().StringVarP(&region, "region", "r", "", "AWS region (optional, defaults to AWS_REGION env var or us-east-1)")
 	minimalRootCmd.PersistentFlags().BoolVarP(&jsonOutput, "json", "j", false, "Output in JSON format")
-	minimalRootCmd.MarkPersistentFlagRequired("region")
 	
 	return minimalRootCmd.Execute()
 }
