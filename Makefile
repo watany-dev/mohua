@@ -25,28 +25,28 @@ install-upx:
 # Build the binary with optimizations
 build: install-upx
 	@echo "Building optimized binary..."
-	CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o sagemaker-monitor
+	CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o mohua
 	@echo "Compressing with UPX..."
-	upx --best --lzma sagemaker-monitor
-	@echo "Build complete: sagemaker-monitor"
+	upx --best --lzma mohua
+	@echo "Build complete: mohua"
 
 # Build for all platforms
 build-all: install-upx
 	@echo "Building for all platforms..."
 	# Linux
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o sagemaker-monitor-linux
-	upx --best --lzma sagemaker-monitor-linux
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o mohua-linux
+	upx --best --lzma mohua-linux
 	# macOS
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o sagemaker-monitor-darwin
-	upx --best --lzma sagemaker-monitor-darwin
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o mohua-darwin
+	upx --best --lzma mohua-darwin
 	# Windows
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o sagemaker-monitor-windows.exe
-	upx --best --lzma sagemaker-monitor-windows.exe
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o mohua-windows.exe
+	upx --best --lzma mohua-windows.exe
 	@echo "Build complete for all platforms"
 
 # Clean build artifacts
 clean:
-	rm -f sagemaker-monitor sagemaker-monitor-linux sagemaker-monitor-darwin sagemaker-monitor-windows.exe
+	rm -f mohua mohua-linux mohua-darwin mohua-windows.exe
 
 # Show help
 help:

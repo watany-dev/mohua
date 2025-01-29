@@ -14,11 +14,11 @@ jobs:
         go-version: [1.21.x]
         include:
           - os: ubuntu-latest
-            output-name: sagemaker-monitor-linux
+            output-name: mohua-linux
           - os: macos-latest
-            output-name: sagemaker-monitor-darwin
+            output-name: mohua-darwin
           - os: windows-latest
-            output-name: sagemaker-monitor-windows.exe
+            output-name: mohua-windows.exe
 
     runs-on: ${{ matrix.os }}
     
@@ -120,9 +120,9 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          **/bin/sagemaker-monitor-linux
-          **/bin/sagemaker-monitor-darwin
-          **/bin/sagemaker-monitor-windows.exe
+          **/bin/mohua-linux
+          **/bin/mohua-darwin
+          **/bin/mohua-windows.exe
           **/configs/pricing.yaml
           **/README.md
           **/LICENSE
