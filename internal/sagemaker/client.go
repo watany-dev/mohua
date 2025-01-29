@@ -57,6 +57,9 @@ func NewClient(region string) (*Client, error) {
 
 // ValidateConfiguration checks if the AWS configuration is valid and resources are likely to exist
 func (c *Client) ValidateConfiguration(ctx context.Context) (bool, error) {
+	// Create an error tracker to manage error suppression
+	errorTracker := NewErrorTracker()
+
 	// Check if we can list domains as a lightweight way to validate configuration
 	input := &sagemaker.ListDomainsInput{
 		MaxResults: aws.Int32(1), // We only need to check if we can list
@@ -64,7 +67,7 @@ func (c *Client) ValidateConfiguration(ctx context.Context) (bool, error) {
 
 	_, err := c.client.ListDomains(ctx, input)
 	if err != nil {
-		// If it's an authorization or configuration error, return false
+		// If it's an authorization or configuration error, return false without error
 		var apiErr smithy.APIError
 		if errors.As(err, &apiErr) {
 			switch apiErr.ErrorCode() {
@@ -75,8 +78,13 @@ func (c *Client) ValidateConfiguration(ctx context.Context) (bool, error) {
 				return false, nil
 			}
 		}
-		// For other errors, return the error
-		return false, err
+
+		// For other errors, track and potentially suppress them
+		if trackedErr := errorTracker.Track(err); trackedErr != nil {
+			// Wrap the error without additional context to maintain error message consistency
+			return false, WrapError(trackedErr)
+		}
+		return false, nil
 	}
 
 	return true, nil
