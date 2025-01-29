@@ -1,13 +1,21 @@
-.PHONY: all build clean install-upx
+# Makefile for SageMaker Cost Calculator
 
-# Get the version information
-VERSION := $(shell git describe --tags --always)
-COMMIT := $(shell git rev-parse HEAD)
-BUILD_DATE := $(shell date -u '+%Y-%m-%d')
-LDFLAGS := -s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}
+# Go parameters
+GOCMD=go
+GOBUILD=$(GOCMD) build
+GOTEST=$(GOCMD) test
+GOMOD=$(GOCMD) mod
+BINARY_NAME=mohua
+
+# Directories
+SRC_DIR=.
+INTERNAL_DIR=internal
+
+# Build flags
+LDFLAGS=-s -w
 
 # Default target
-all: build
+all: test build
 
 # Install UPX if not present
 install-upx:
@@ -25,34 +33,42 @@ install-upx:
 # Build the binary with optimizations
 build: install-upx
 	@echo "Building optimized binary..."
-	CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o mohua
+	CGO_ENABLED=0 $(GOBUILD) -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) $(SRC_DIR)
 	@echo "Compressing with UPX..."
-	upx --best --lzma mohua
-	@echo "Build complete: mohua"
+	upx --best --lzma $(BINARY_NAME)
+	@echo "Build complete"
 
-# Build for all platforms
-build-all: install-upx
-	@echo "Building for all platforms..."
-	# Linux
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o mohua-linux
-	upx --best --lzma mohua-linux
-	# macOS
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o mohua-darwin
-	upx --best --lzma mohua-darwin
-	# Windows
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o mohua-windows.exe
-	upx --best --lzma mohua-windows.exe
-	@echo "Build complete for all platforms"
+# Run tests
+test:
+	$(GOTEST) -v ./...
+
+# Run tests with coverage
+cover:
+	$(GOTEST) -coverprofile=coverage.out ./...
+	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 
 # Clean build artifacts
 clean:
-	rm -f mohua mohua-linux mohua-darwin mohua-windows.exe
+	rm -f $(BINARY_NAME)
+	rm -f coverage.out
+	rm -f coverage.html
 
-# Show help
-help:
-	@echo "Available targets:"
-	@echo "  make          - Build optimized binary for current platform"
-	@echo "  make build    - Same as above"
-	@echo "  make build-all- Build optimized binaries for all platforms"
-	@echo "  make clean    - Remove built binaries"
-	@echo "  make help     - Show this help"
+# Tidy dependencies
+deps:
+	$(GOMOD) tidy
+	$(GOMOD) verify
+
+# Lint the code
+lint:
+	golangci-lint run
+
+# Install development tools
+install-dev-tools:
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+# Run the application
+run:
+	$(GOBUILD) -o $(BINARY_NAME) $(SRC_DIR)
+	./$(BINARY_NAME)
+
+.PHONY: all build test cover clean deps lint install-dev-tools run

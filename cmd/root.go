@@ -145,6 +145,30 @@ func runMonitor() error {
 		})
 	}
 
+	// Get Canvas apps
+	canvasApps, err := client.ListCanvasApps(ctx)
+	if err != nil {
+		fmt.Printf("Warning: Failed to list Canvas apps: %v\n", err)
+	}
+	for _, app := range canvasApps {
+		cost := calculator.CalculateCanvasCost(
+			fmt.Sprintf("%s/%s", app.UserProfile, app.Name),
+			app.InstanceType,
+			app.CreationTime,
+		)
+		printer.AddResource(display.ResourceInfo{
+			ResourceType:  "Canvas",
+			Name:         cost.ResourceName,
+			Status:       app.Status,
+			InstanceType: cost.InstanceType,
+			RunningTime:  cost.RunningTime.String(),
+			HourlyCost:   cost.HourlyCost,
+			CurrentCost:  cost.CurrentCost,
+			ProjectedCost: cost.ProjectedCost,
+			TotalCost:    cost.CurrentCost,
+		})
+	}
+
 	// Print results
 	printer.Print()
 	return nil
