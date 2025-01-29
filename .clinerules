@@ -9,3 +9,12 @@
    - If a lint rule needs to be disabled, ask the user first and explain why
    - Prefer fixing the underlying issue over disabling the lint rule
    - Document any approved lint rule disabling with a comment explaining the reason
+
+# Plan Mode Rules
+
+1. Then they use Plan mode to:
+
+- Map dependencies
+- Identify potential edge cases
+- Create http://hypothesis.md with [x][] format
+- Generate minimal test cases
