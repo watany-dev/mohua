@@ -25,22 +25,33 @@ type SageMakerClientInterface interface {
 // Client implements only the necessary SageMaker API operations
 type Client struct {
 	client SageMakerClientInterface
+	region string
 }
 
 // NewClient creates a new SageMaker client
 func NewClient(region string) (*Client, error) {
 	var opts []func(*config.LoadOptions) error
+	
+	// If region is provided, use it; otherwise, let AWS SDK handle region selection
 	if region != "" {
 		opts = append(opts, config.WithRegion(region))
 	}
 	
 	cfg, err := config.LoadDefaultConfig(context.Background(), opts...)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load SDK config: %w", err)
+		return nil, fmt.Errorf("unable to load AWS SDK configuration: %w", err)
 	}
+
+	// Log the effective region for debugging
+	effectiveRegion := cfg.Region
+	if effectiveRegion == "" {
+		effectiveRegion = "No region configured"
+	}
+	// fmt.Fprintf(os.Stderr, "Using AWS region: %s\n", effectiveRegion)
 
 	return &Client{
 		client: sagemaker.NewFromConfig(cfg),
+		region: cfg.Region,
 	}, nil
 }
 
@@ -135,6 +146,11 @@ func (c *Client) ListNotebooks(ctx context.Context) ([]ResourceInfo, error) {
 }
 
 // ListStudioApps returns only running studio applications
+// GetRegion returns the configured region for the client
+func (c *Client) GetRegion() string {
+	return c.region
+}
+
 func (c *Client) ListStudioApps(ctx context.Context) ([]ResourceInfo, error) {
 	var resources []ResourceInfo
 
