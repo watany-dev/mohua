@@ -10,245 +10,146 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker/types"
 )
 
-// Client represents a SageMaker client with methods to fetch resource information
-type Client struct {
-	sagemaker *sagemaker.Client
+// SageMakerClientInterface defines the methods used by Client
+type SageMakerClientInterface interface {
+	ListApps(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error)
+	ListEndpoints(ctx context.Context, params *sagemaker.ListEndpointsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListEndpointsOutput, error)
+	ListNotebookInstances(ctx context.Context, params *sagemaker.ListNotebookInstancesInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListNotebookInstancesOutput, error)
 }
 
-// NewClient creates a new SageMaker client for the specified region
+// Client implements only the necessary SageMaker API operations
+type Client struct {
+	client SageMakerClientInterface
+}
+
+// NewClient creates a new SageMaker client
 func NewClient(region string) (*Client, error) {
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(region),
-	)
+	var opts []func(*config.LoadOptions) error
+	if region != "" {
+		opts = append(opts, config.WithRegion(region))
+	}
+	
+	cfg, err := config.LoadDefaultConfig(context.Background(), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load SDK config: %w", err)
 	}
 
 	return &Client{
-		sagemaker: sagemaker.NewFromConfig(cfg),
+		client: sagemaker.NewFromConfig(cfg),
 	}, nil
 }
 
-// EndpointInfo contains information about a SageMaker endpoint
-type EndpointInfo struct {
-	Name         string
-	InstanceType string
-	InstanceCount int
-	Status       string
-	CreationTime time.Time
-}
+// ListEndpoints returns only active endpoints
+func (c *Client) ListEndpoints(ctx context.Context) ([]ResourceInfo, error) {
+	var resources []ResourceInfo
+	
+	input := &sagemaker.ListEndpointsInput{}
+	output, err := c.client.ListEndpoints(ctx, input)
+	if err != nil {
+		return nil, err
+	}
 
-// NotebookInfo contains information about a SageMaker notebook instance
-type NotebookInfo struct {
-	Name         string
-	InstanceType string
-	Status       string
-	VolumeSize   int
-	CreationTime time.Time
-}
-
-// StudioInfo contains information about a SageMaker Studio instance
-type StudioInfo struct {
-	DomainID     string
-	UserProfile  string
-	AppType      string
-	InstanceType string
-	Status       string
-	CreationTime time.Time
-}
-
-// CanvasInfo contains information about a SageMaker Canvas application
-type CanvasInfo struct {
-	Name         string
-	DomainID     string
-	UserProfile  string
-	InstanceType string
-	Status       string
-	CreationTime time.Time
-}
-
-// ListEndpoints returns information about all SageMaker endpoints
-func (c *Client) ListEndpoints(ctx context.Context) ([]EndpointInfo, error) {
-	var endpoints []EndpointInfo
-	paginator := sagemaker.NewListEndpointsPaginator(c.sagemaker, &sagemaker.ListEndpointsInput{})
-
-	for paginator.HasMorePages() {
-		output, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list endpoints: %w", err)
+	for _, endpoint := range output.Endpoints {
+		if endpoint.EndpointStatus == types.EndpointStatusInService {
+			// we'll skip detailed endpoint config
+			resources = append(resources, ResourceInfo{
+				Name:         *endpoint.EndpointName,
+				Status:       string(endpoint.EndpointStatus),
+				InstanceType: "unknown", // Simplified version doesn't fetch detailed config
+				InstanceCount: 1,        // Default to 1 for simplified version
+				CreationTime: *endpoint.CreationTime,
+			})
 		}
+	}
 
-		for _, endpoint := range output.Endpoints {
-			desc, err := c.sagemaker.DescribeEndpoint(ctx, &sagemaker.DescribeEndpointInput{
-				EndpointName: endpoint.EndpointName,
+	return resources, nil
+}
+
+// ListNotebooks returns only running notebook instances
+func (c *Client) ListNotebooks(ctx context.Context) ([]ResourceInfo, error) {
+	var resources []ResourceInfo
+
+	input := &sagemaker.ListNotebookInstancesInput{}
+	output, err := c.client.ListNotebookInstances(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, notebook := range output.NotebookInstances {
+		if notebook.NotebookInstanceStatus == types.NotebookInstanceStatusInService {
+			resources = append(resources, ResourceInfo{
+				Name:         *notebook.NotebookInstanceName,
+				Status:       string(notebook.NotebookInstanceStatus),
+				InstanceType: string(notebook.InstanceType),
+				CreationTime: *notebook.CreationTime,
+				VolumeSize:   0, // Simplified version doesn't fetch volume size
 			})
-			if err != nil {
-				continue
+		}
+	}
+
+	return resources, nil
+}
+
+// ListStudioApps returns only running studio applications
+func (c *Client) ListStudioApps(ctx context.Context) ([]ResourceInfo, error) {
+	var resources []ResourceInfo
+
+	input := &sagemaker.ListAppsInput{}
+	output, err := c.client.ListApps(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, app := range output.Apps {
+		if app.Status == types.AppStatusInService {
+			// Defensive nil checks
+			var name, userProfile, appType, instanceType string
+			var creationTime time.Time
+
+			if app.AppName != nil {
+				name = *app.AppName
 			}
 
-			config, err := c.sagemaker.DescribeEndpointConfig(ctx, &sagemaker.DescribeEndpointConfigInput{
-				EndpointConfigName: desc.EndpointConfigName,
-			})
-			if err != nil {
-				continue
+			if app.UserProfileName != nil {
+				userProfile = *app.UserProfileName
 			}
 
-			if len(config.ProductionVariants) > 0 {
-				endpoints = append(endpoints, EndpointInfo{
-					Name:          *endpoint.EndpointName,
-					InstanceType:  string(config.ProductionVariants[0].InstanceType),
-					InstanceCount: int(*config.ProductionVariants[0].InitialInstanceCount),
-					Status:        string(desc.EndpointStatus),
-					CreationTime:  *endpoint.CreationTime,
+			if app.CreationTime != nil {
+				creationTime = *app.CreationTime
+			}
+
+			// Handle potential nil ResourceSpec
+			if app.ResourceSpec != nil {
+				instanceType = string(app.ResourceSpec.InstanceType)
+			}
+
+			appType = string(app.AppType)
+
+			// Only add resource if we have a meaningful name
+			if name != "" {
+				resources = append(resources, ResourceInfo{
+					Name:         name,
+					Status:       string(app.Status),
+					InstanceType: instanceType,
+					CreationTime: creationTime,
+					UserProfile:  userProfile,
+					AppType:      appType,
 				})
 			}
 		}
 	}
 
-	return endpoints, nil
+	return resources, nil
 }
 
-// ListNotebooks returns information about all SageMaker notebook instances
-func (c *Client) ListNotebooks(ctx context.Context) ([]NotebookInfo, error) {
-	var notebooks []NotebookInfo
-	paginator := sagemaker.NewListNotebookInstancesPaginator(c.sagemaker, &sagemaker.ListNotebookInstancesInput{})
-
-	for paginator.HasMorePages() {
-		output, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list notebooks: %w", err)
-		}
-
-		for _, notebook := range output.NotebookInstances {
-			notebooks = append(notebooks, NotebookInfo{
-				Name:         *notebook.NotebookInstanceName,
-				InstanceType: string(notebook.InstanceType),
-				Status:      string(notebook.NotebookInstanceStatus),
-				VolumeSize:  20, // デフォルト値として20GBを設定
-				CreationTime: *notebook.CreationTime,
-			})
-		}
-	}
-
-	return notebooks, nil
-}
-
-// ListStudioApps returns information about all SageMaker Studio applications
-func (c *Client) ListStudioApps(ctx context.Context) ([]StudioInfo, error) {
-	var apps []StudioInfo
-	paginator := sagemaker.NewListDomainsPaginator(c.sagemaker, &sagemaker.ListDomainsInput{})
-
-	for paginator.HasMorePages() {
-		domains, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list domains: %w", err)
-		}
-
-		for _, domain := range domains.Domains {
-			userPaginator := sagemaker.NewListUserProfilesPaginator(c.sagemaker, &sagemaker.ListUserProfilesInput{
-				DomainIdEquals: domain.DomainId,
-			})
-
-			for userPaginator.HasMorePages() {
-				users, err := userPaginator.NextPage(ctx)
-				if err != nil {
-					continue
-				}
-
-				for _, user := range users.UserProfiles {
-					appPaginator := sagemaker.NewListAppsPaginator(c.sagemaker, &sagemaker.ListAppsInput{
-						DomainIdEquals:        domain.DomainId,
-						UserProfileNameEquals: user.UserProfileName,
-					})
-
-					for appPaginator.HasMorePages() {
-						appOutput, err := appPaginator.NextPage(ctx)
-						if err != nil {
-							continue
-						}
-
-						for _, app := range appOutput.Apps {
-							var instanceType string
-							if app.ResourceSpec != nil {
-								instanceType = string(app.ResourceSpec.InstanceType)
-							}
-
-							apps = append(apps, StudioInfo{
-								DomainID:     *domain.DomainId,
-								UserProfile:  *user.UserProfileName,
-								AppType:      string(app.AppType),
-								InstanceType: instanceType,
-								Status:       string(app.Status),
-								CreationTime: *app.CreationTime,
-							})
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return apps, nil
-}
-
-// ListCanvasApps returns information about all SageMaker Canvas applications
-func (c *Client) ListCanvasApps(ctx context.Context) ([]CanvasInfo, error) {
-	var canvasApps []CanvasInfo
-	paginator := sagemaker.NewListDomainsPaginator(c.sagemaker, &sagemaker.ListDomainsInput{})
-
-	for paginator.HasMorePages() {
-		domains, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list domains: %w", err)
-		}
-
-		for _, domain := range domains.Domains {
-			userPaginator := sagemaker.NewListUserProfilesPaginator(c.sagemaker, &sagemaker.ListUserProfilesInput{
-				DomainIdEquals: domain.DomainId,
-			})
-
-			for userPaginator.HasMorePages() {
-				users, err := userPaginator.NextPage(ctx)
-				if err != nil {
-					continue
-				}
-
-				for _, user := range users.UserProfiles {
-					// Filter apps manually since ListAppsInput doesn't support direct AppType filtering
-					appPaginator := sagemaker.NewListAppsPaginator(c.sagemaker, &sagemaker.ListAppsInput{
-						DomainIdEquals:        domain.DomainId,
-						UserProfileNameEquals: user.UserProfileName,
-					})
-
-					for appPaginator.HasMorePages() {
-						appOutput, err := appPaginator.NextPage(ctx)
-						if err != nil {
-							continue
-						}
-
-						for _, app := range appOutput.Apps {
-							// Only add Canvas apps
-							if app.AppType == types.AppTypeCanvas {
-								var instanceType string
-								if app.ResourceSpec != nil {
-									instanceType = string(app.ResourceSpec.InstanceType)
-								}
-
-								canvasApps = append(canvasApps, CanvasInfo{
-									Name:         *app.AppName,
-									DomainID:     *domain.DomainId,
-									UserProfile:  *user.UserProfileName,
-									InstanceType: instanceType,
-									Status:       string(app.Status),
-									CreationTime: *app.CreationTime,
-								})
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return canvasApps, nil
+// ResourceInfo contains common fields for SageMaker resources
+type ResourceInfo struct {
+	Name          string
+	Status        string
+	InstanceType  string
+	InstanceCount int
+	CreationTime  time.Time
+	VolumeSize    int
+	UserProfile   string
+	AppType       string
 }

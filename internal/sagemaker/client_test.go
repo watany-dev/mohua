@@ -12,20 +12,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewMinimalClient(t *testing.T) {
+func TestNewClient(t *testing.T) {
 	// Test with explicit region
-	client, err := NewMinimalClient("us-west-2")
+	client, err := NewClient("us-west-2")
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
 
 	// Test with empty region (should use AWS SDK's default region resolution)
-	client, err = NewMinimalClient("")
+	client, err = NewClient("")
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
 
 	// Test with AWS_REGION environment variable
 	os.Setenv("AWS_REGION", "us-east-1")
-	client, err = NewMinimalClient("")
+	client, err = NewClient("")
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
 	os.Unsetenv("AWS_REGION")
@@ -93,13 +93,13 @@ func TestListStudioApps_NilFields(t *testing.T) {
 		},
 	}
 
-	// Create a MinimalClient with the mock
-	minimalClient := &MinimalClient{
+	// Create a Client with the mock
+	client := &Client{
 		client: mockClient,
 	}
 
 	// Call the method
-	resources, err := minimalClient.ListStudioApps(ctx)
+	resources, err := client.ListStudioApps(ctx)
 
 	// Assert expectations
 	assert.NoError(t, err)

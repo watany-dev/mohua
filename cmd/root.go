@@ -14,28 +14,28 @@ var (
 	jsonOutput bool
 )
 
-// minimalRootCmd represents the base command when called without any subcommands
-var minimalRootCmd = &cobra.Command{
+// rootCmd represents the base command when called without any subcommands
+var rootCmd = &cobra.Command{
 	Use:   "mohua",
 	Short: "Monitor AWS SageMaker compute resources and their costs",
 	Long: `A monitoring tool for AWS SageMaker that helps track running compute resources
 and their associated costs.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runMinimalMonitor()
+		return runMonitor()
 	},
 }
 
-// ExecuteMinimal adds all child commands to the root command and sets flags appropriately.
-func ExecuteMinimal() error {
-	minimalRootCmd.PersistentFlags().StringVarP(&region, "region", "r", "", "AWS region (optional, defaults to AWS_REGION env var or us-east-1)")
-	minimalRootCmd.PersistentFlags().BoolVarP(&jsonOutput, "json", "j", false, "Output in JSON format")
+// Execute adds all child commands to the root command and sets flags appropriately.
+func Execute() error {
+	rootCmd.PersistentFlags().StringVarP(&region, "region", "r", "", "AWS region (optional, defaults to AWS_REGION env var or us-east-1)")
+	rootCmd.PersistentFlags().BoolVarP(&jsonOutput, "json", "j", false, "Output in JSON format")
 	
-	return minimalRootCmd.Execute()
+	return rootCmd.Execute()
 }
 
-func runMinimalMonitor() error {
-	// Create minimal SageMaker client
-	client, err := sagemaker.NewMinimalClient(region)
+func runMonitor() error {
+	// Create SageMaker client
+	client, err := sagemaker.NewClient(region)
 	if err != nil {
 		return fmt.Errorf("failed to create SageMaker client: %w", err)
 	}
