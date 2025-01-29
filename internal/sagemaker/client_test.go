@@ -3,6 +3,7 @@ package sagemaker
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,20 +13,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewMinimalClient(t *testing.T) {
+func TestNewClient(t *testing.T) {
 	// Test with explicit region
-	client, err := NewMinimalClient("us-west-2")
+	client, err := NewClient("us-west-2")
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
 
 	// Test with empty region (should use AWS SDK's default region resolution)
-	client, err = NewMinimalClient("")
+	client, err = NewClient("")
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
 
 	// Test with AWS_REGION environment variable
 	os.Setenv("AWS_REGION", "us-east-1")
-	client, err = NewMinimalClient("")
+	client, err = NewClient("")
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
 	os.Unsetenv("AWS_REGION")
@@ -93,13 +94,13 @@ func TestListStudioApps_NilFields(t *testing.T) {
 		},
 	}
 
-	// Create a MinimalClient with the mock
-	minimalClient := &MinimalClient{
+	// Create a Client with the mock
+	client := &Client{
 		client: mockClient,
 	}
 
 	// Call the method
-	resources, err := minimalClient.ListStudioApps(ctx)
+	resources, err := client.ListStudioApps(ctx)
 
 	// Assert expectations
 	assert.NoError(t, err)
@@ -111,4 +112,98 @@ func TestListStudioApps_NilFields(t *testing.T) {
 		assert.Equal(t, "TestUser", resources[0].UserProfile)
 		assert.Equal(t, "ml.t3.medium", resources[0].InstanceType)
 	}
+}
+
+func TestConcurrentResourceListing(t *testing.T) {
+	// Prepare a context
+	ctx := context.Background()
+
+	// Create a mock client with simulated delays
+	mockClient := &MockSageMakerClient{
+		listEndpointsFunc: func(ctx context.Context, params *sagemaker.ListEndpointsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListEndpointsOutput, error) {
+			time.Sleep(100 * time.Millisecond) // Simulate some delay
+			return &sagemaker.ListEndpointsOutput{
+				Endpoints: []types.EndpointSummary{
+					{
+						EndpointName:     aws.String("Endpoint1"),
+						EndpointStatus:   types.EndpointStatusInService,
+						CreationTime:     aws.Time(time.Now().Add(-1 * time.Hour)),
+					},
+				},
+			}, nil
+		},
+		listNotebookFunc: func(ctx context.Context, params *sagemaker.ListNotebookInstancesInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListNotebookInstancesOutput, error) {
+			time.Sleep(50 * time.Millisecond) // Simulate some delay
+			return &sagemaker.ListNotebookInstancesOutput{
+				NotebookInstances: []types.NotebookInstanceSummary{
+					{
+						NotebookInstanceName:     aws.String("Notebook1"),
+						NotebookInstanceStatus:   types.NotebookInstanceStatusInService,
+						CreationTime:             aws.Time(time.Now().Add(-2 * time.Hour)),
+					},
+				},
+			}, nil
+		},
+		listAppsFunc: func(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error) {
+			time.Sleep(75 * time.Millisecond) // Simulate some delay
+			return &sagemaker.ListAppsOutput{
+				Apps: []types.AppDetails{
+					{
+						AppName:     aws.String("App1"),
+						Status:      types.AppStatusInService,
+						CreationTime: aws.Time(time.Now().Add(-3 * time.Hour)),
+					},
+				},
+			}, nil
+		},
+	}
+
+	// Create a Client with the mock
+	client := &Client{
+		client: mockClient,
+	}
+
+	// Measure total time for concurrent calls
+	startTime := time.Now()
+	
+	// Perform concurrent resource listing
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	var endpointResults, notebookResults, appResults []ResourceInfo
+	var endpointErr, notebookErr, appErr error
+
+	go func() {
+		defer wg.Done()
+		endpointResults, endpointErr = client.ListEndpoints(ctx)
+	}()
+
+	go func() {
+		defer wg.Done()
+		notebookResults, notebookErr = client.ListNotebooks(ctx)
+	}()
+
+	go func() {
+		defer wg.Done()
+		appResults, appErr = client.ListStudioApps(ctx)
+	}()
+
+	wg.Wait()
+
+	// Calculate total time
+	totalTime := time.Since(startTime)
+
+	// Assert no errors
+	assert.NoError(t, endpointErr)
+	assert.NoError(t, notebookErr)
+	assert.NoError(t, appErr)
+
+	// Assert results
+	assert.Len(t, endpointResults, 1)
+	assert.Len(t, notebookResults, 1)
+	assert.Len(t, appResults, 1)
+
+	// Total time should be less than sequential calls (sum of delays)
+	// Allowing some buffer for goroutine overhead
+	assert.Less(t, totalTime.Milliseconds(), int64(250), "Concurrent calls should be faster than sequential")
 }

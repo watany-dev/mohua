@@ -4,12 +4,22 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
-
+	"sync"
+	"time"
 	"github.com/spf13/cobra"
-	"mohua/internal/cost"
 	"mohua/internal/display"
 	"mohua/internal/sagemaker"
+)
+
+// ResourceResult holds the results and errors from API calls
+type ResourceResult struct {
+	Resources []sagemaker.ResourceInfo
+	Error     error
+}
+
+var (
+	region    string
+	jsonOutput bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -17,31 +27,18 @@ var rootCmd = &cobra.Command{
 	Use:   "mohua",
 	Short: "Monitor AWS SageMaker compute resources and their costs",
 	Long: `A monitoring tool for AWS SageMaker that helps track running compute resources
-and their associated costs. It provides information about:
-
-- Endpoints
-- Notebook Instances
-- Studio Applications
-- Running Jobs
-
-The tool shows current status, running time, and cost projections for each resource.`,
+and their associated costs.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runMonitor()
 	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-}
-
-func init() {
-	rootCmd.PersistentFlags().StringVarP(&region, "region", "r", "", "AWS region (required)")
+func Execute() error {
+	rootCmd.PersistentFlags().StringVarP(&region, "region", "r", "", "AWS region (optional, defaults to AWS_REGION env var or us-east-1)")
 	rootCmd.PersistentFlags().BoolVarP(&jsonOutput, "json", "j", false, "Output in JSON format")
-	rootCmd.MarkPersistentFlagRequired("region")
+	
+	return rootCmd.Execute()
 }
 
 func runMonitor() error {
@@ -51,125 +48,143 @@ func runMonitor() error {
 		return fmt.Errorf("failed to create SageMaker client: %w", err)
 	}
 
-	// Load pricing data
-	execPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-	pricingPath := filepath.Join(filepath.Dir(execPath), "configs", "pricing.yaml")
-	pricing, err := cost.LoadPricing(pricingPath)
-	if err != nil {
-		return fmt.Errorf("failed to load pricing data: %w", err)
-	}
-
-	// Create cost calculator
-	calculator := cost.NewCalculator(pricing)
-
-	// Create printer
-	printer := display.NewPrinter(jsonOutput)
-
 	ctx := context.Background()
 
-	// Get endpoints
-	endpoints, err := client.ListEndpoints(ctx)
-	if err != nil {
-		fmt.Printf("Warning: Failed to list endpoints: %v\n", err)
-	}
-	for _, endpoint := range endpoints {
-		cost := calculator.CalculateEndpointCost(
-			endpoint.Name,
-			endpoint.InstanceType,
-			endpoint.InstanceCount,
-			endpoint.CreationTime,
-		)
-		printer.AddResource(display.ResourceInfo{
-			ResourceType:  "Endpoint",
-			Name:         cost.ResourceName,
-			Status:       endpoint.Status,
-			InstanceType: cost.InstanceType,
-			RunningTime:  cost.RunningTime.String(),
-			HourlyCost:   cost.HourlyCost,
-			CurrentCost:  cost.CurrentCost,
-			ProjectedCost: cost.ProjectedCost,
-			TotalCost:    cost.CurrentCost,
-		})
+	// Create channels for each resource type
+	endpointsChan := make(chan ResourceResult, 1)
+	notebooksChan := make(chan ResourceResult, 1)
+	appsChan := make(chan ResourceResult, 1)
+
+	// Launch goroutines for each API call
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		endpoints, err := client.ListEndpoints(ctx)
+		endpointsChan <- ResourceResult{Resources: endpoints, Error: err}
+	}()
+
+	go func() {
+		defer wg.Done()
+		notebooks, err := client.ListNotebooks(ctx)
+		notebooksChan <- ResourceResult{Resources: notebooks, Error: err}
+	}()
+
+	go func() {
+		defer wg.Done()
+		apps, err := client.ListStudioApps(ctx)
+		appsChan <- ResourceResult{Resources: apps, Error: err}
+	}()
+
+	// Close channels after all goroutines complete
+	go func() {
+		wg.Wait()
+		close(endpointsChan)
+		close(notebooksChan)
+		close(appsChan)
+	}()
+
+	// Track if any resources were found and collect errors
+	resourceFound := false
+	var printer *display.Printer
+	var firstError error
+
+	// Process endpoints
+	if result := <-endpointsChan; result.Error != nil {
+		// Check if the error is retryable
+		if retryableErr, ok := result.Error.(*sagemaker.RetryableError); ok {
+			// Log the retryable error, but don't stop execution
+			fmt.Fprintf(os.Stderr, "Retryable error listing endpoints: %v\n", retryableErr)
+		} else {
+			if firstError == nil {
+				firstError = fmt.Errorf("failed to list endpoints: %w", result.Error)
+			}
+		}
+	} else if len(result.Resources) > 0 {
+		if !resourceFound {
+			printer = display.NewPrinter(jsonOutput)
+			printer.PrintHeader()
+			resourceFound = true
+		}
+		for _, endpoint := range result.Resources {
+			printer.PrintResource(display.ResourceInfo{
+				ResourceType:  "Endpoint",
+				Name:         endpoint.Name,
+				Status:       endpoint.Status,
+				InstanceType: endpoint.InstanceType,
+				RunningTime:  time.Since(endpoint.CreationTime).String(),
+			})
+		}
 	}
 
-	// Get notebooks
-	notebooks, err := client.ListNotebooks(ctx)
-	if err != nil {
-		fmt.Printf("Warning: Failed to list notebooks: %v\n", err)
-	}
-	for _, notebook := range notebooks {
-		cost := calculator.CalculateNotebookCost(
-			notebook.Name,
-			notebook.InstanceType,
-			notebook.CreationTime,
-			notebook.VolumeSize,
-		)
-		printer.AddResource(display.ResourceInfo{
-			ResourceType:  "Notebook",
-			Name:         cost.ResourceName,
-			Status:       notebook.Status,
-			InstanceType: cost.InstanceType,
-			RunningTime:  cost.RunningTime.String(),
-			HourlyCost:   cost.HourlyCost,
-			CurrentCost:  cost.CurrentCost,
-			ProjectedCost: cost.ProjectedCost,
-			StorageCost:  cost.StorageCost,
-			TotalCost:    cost.CurrentCost + cost.StorageCost,
-		})
-	}
-
-	// Get Studio apps
-	apps, err := client.ListStudioApps(ctx)
-	if err != nil {
-		fmt.Printf("Warning: Failed to list Studio apps: %v\n", err)
-	}
-	for _, app := range apps {
-		cost := calculator.CalculateStudioCost(
-			fmt.Sprintf("%s/%s", app.UserProfile, app.AppType),
-			app.InstanceType,
-			app.CreationTime,
-		)
-		printer.AddResource(display.ResourceInfo{
-			ResourceType:  "Studio",
-			Name:         cost.ResourceName,
-			Status:       app.Status,
-			InstanceType: cost.InstanceType,
-			RunningTime:  cost.RunningTime.String(),
-			HourlyCost:   cost.HourlyCost,
-			CurrentCost:  cost.CurrentCost,
-			ProjectedCost: cost.ProjectedCost,
-			TotalCost:    cost.CurrentCost,
-		})
+	// Process notebooks
+	if result := <-notebooksChan; result.Error != nil {
+		// Check if the error is retryable
+		if retryableErr, ok := result.Error.(*sagemaker.RetryableError); ok {
+			// Log the retryable error, but don't stop execution
+			fmt.Fprintf(os.Stderr, "Retryable error listing notebooks: %v\n", retryableErr)
+		} else {
+			if firstError == nil {
+				firstError = fmt.Errorf("failed to list notebooks: %w", result.Error)
+			}
+		}
+	} else if len(result.Resources) > 0 {
+		if !resourceFound {
+			printer = display.NewPrinter(jsonOutput)
+			printer.PrintHeader()
+			resourceFound = true
+		}
+		for _, notebook := range result.Resources {
+			printer.PrintResource(display.ResourceInfo{
+				ResourceType:  "Notebook",
+				Name:         notebook.Name,
+				Status:       notebook.Status,
+				InstanceType: notebook.InstanceType,
+				RunningTime:  time.Since(notebook.CreationTime).String(),
+			})
+		}
 	}
 
-	// Get Canvas apps
-	canvasApps, err := client.ListCanvasApps(ctx)
-	if err != nil {
-		fmt.Printf("Warning: Failed to list Canvas apps: %v\n", err)
-	}
-	for _, app := range canvasApps {
-		cost := calculator.CalculateCanvasCost(
-			fmt.Sprintf("%s/%s", app.UserProfile, app.Name),
-			app.InstanceType,
-			app.CreationTime,
-		)
-		printer.AddResource(display.ResourceInfo{
-			ResourceType:  "Canvas",
-			Name:         cost.ResourceName,
-			Status:       app.Status,
-			InstanceType: cost.InstanceType,
-			RunningTime:  cost.RunningTime.String(),
-			HourlyCost:   cost.HourlyCost,
-			CurrentCost:  cost.CurrentCost,
-			ProjectedCost: cost.ProjectedCost,
-			TotalCost:    cost.CurrentCost,
-		})
+	// Process Studio apps
+	if result := <-appsChan; result.Error != nil {
+		// Check if the error is retryable
+		if retryableErr, ok := result.Error.(*sagemaker.RetryableError); ok {
+			// Log the retryable error, but don't stop execution
+			fmt.Fprintf(os.Stderr, "Retryable error listing studio apps: %v\n", retryableErr)
+		} else {
+			if firstError == nil {
+				firstError = fmt.Errorf("failed to list studio apps: %w", result.Error)
+			}
+		}
+	} else if len(result.Resources) > 0 {
+		if !resourceFound {
+			printer = display.NewPrinter(jsonOutput)
+			printer.PrintHeader()
+			resourceFound = true
+		}
+		for _, app := range result.Resources {
+			printer.PrintResource(display.ResourceInfo{
+				ResourceType:  "Studio",
+				Name:         fmt.Sprintf("%s/%s", app.UserProfile, app.AppType),
+				Status:       app.Status,
+				InstanceType: app.InstanceType,
+				RunningTime:  time.Since(app.CreationTime).String(),
+			})
+		}
 	}
 
-	// Print results
-	printer.Print()
+	// Return first error encountered if any
+	if firstError != nil {
+		return firstError
+	}
+
+	// If no resources found, return an error
+	if !resourceFound {
+		return fmt.Errorf("no SageMaker resources found")
+	}
+
+	// Print footer
+	printer.PrintFooter()
 	return nil
 }
