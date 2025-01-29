@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 	"github.com/spf13/cobra"
@@ -91,8 +92,14 @@ func runMonitor() error {
 
 	// Process endpoints
 	if result := <-endpointsChan; result.Error != nil {
-		if firstError == nil {
-			firstError = fmt.Errorf("failed to list endpoints: %w", result.Error)
+		// Check if the error is retryable
+		if retryableErr, ok := result.Error.(*sagemaker.RetryableError); ok {
+			// Log the retryable error, but don't stop execution
+			fmt.Fprintf(os.Stderr, "Retryable error listing endpoints: %v\n", retryableErr)
+		} else {
+			if firstError == nil {
+				firstError = fmt.Errorf("failed to list endpoints: %w", result.Error)
+			}
 		}
 	} else if len(result.Resources) > 0 {
 		if !resourceFound {
@@ -113,8 +120,14 @@ func runMonitor() error {
 
 	// Process notebooks
 	if result := <-notebooksChan; result.Error != nil {
-		if firstError == nil {
-			firstError = fmt.Errorf("failed to list notebooks: %w", result.Error)
+		// Check if the error is retryable
+		if retryableErr, ok := result.Error.(*sagemaker.RetryableError); ok {
+			// Log the retryable error, but don't stop execution
+			fmt.Fprintf(os.Stderr, "Retryable error listing notebooks: %v\n", retryableErr)
+		} else {
+			if firstError == nil {
+				firstError = fmt.Errorf("failed to list notebooks: %w", result.Error)
+			}
 		}
 	} else if len(result.Resources) > 0 {
 		if !resourceFound {
@@ -135,8 +148,14 @@ func runMonitor() error {
 
 	// Process Studio apps
 	if result := <-appsChan; result.Error != nil {
-		if firstError == nil {
-			firstError = fmt.Errorf("failed to list studio apps: %w", result.Error)
+		// Check if the error is retryable
+		if retryableErr, ok := result.Error.(*sagemaker.RetryableError); ok {
+			// Log the retryable error, but don't stop execution
+			fmt.Fprintf(os.Stderr, "Retryable error listing studio apps: %v\n", retryableErr)
+		} else {
+			if firstError == nil {
+				firstError = fmt.Errorf("failed to list studio apps: %w", result.Error)
+			}
 		}
 	} else if len(result.Resources) > 0 {
 		if !resourceFound {

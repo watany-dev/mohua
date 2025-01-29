@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker"
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker/types"
+	"mohua/internal/retry"
 )
 
 // SageMakerClientInterface defines the methods used by Client
@@ -43,103 +44,121 @@ func NewClient(region string) (*Client, error) {
 func (c *Client) ListEndpoints(ctx context.Context) ([]ResourceInfo, error) {
 	var resources []ResourceInfo
 	
-	input := &sagemaker.ListEndpointsInput{}
-	output, err := c.client.ListEndpoints(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, endpoint := range output.Endpoints {
-		if endpoint.EndpointStatus == types.EndpointStatusInService {
-			// we'll skip detailed endpoint config
-			resources = append(resources, ResourceInfo{
-				Name:         *endpoint.EndpointName,
-				Status:       string(endpoint.EndpointStatus),
-				InstanceType: "unknown", // Simplified version doesn't fetch detailed config
-				InstanceCount: 1,        // Default to 1 for simplified version
-				CreationTime: *endpoint.CreationTime,
-			})
+	retrier := retry.NewRetrier(retry.DefaultConfig)
+	err := retrier.Do(ctx, func() error {
+		input := &sagemaker.ListEndpointsInput{}
+		output, err := c.client.ListEndpoints(ctx, input)
+		if err != nil {
+			return WrapError(err)
 		}
-	}
 
-	return resources, nil
+		resources = make([]ResourceInfo, 0, len(output.Endpoints))
+		for _, endpoint := range output.Endpoints {
+			if endpoint.EndpointStatus == types.EndpointStatusInService {
+				// we'll skip detailed endpoint config
+				resources = append(resources, ResourceInfo{
+					Name:         *endpoint.EndpointName,
+					Status:       string(endpoint.EndpointStatus),
+					InstanceType: "unknown", // Simplified version doesn't fetch detailed config
+					InstanceCount: 1,        // Default to 1 for simplified version
+					CreationTime: *endpoint.CreationTime,
+				})
+			}
+		}
+
+		return nil
+	})
+
+	return resources, err
 }
 
 // ListNotebooks returns only running notebook instances
 func (c *Client) ListNotebooks(ctx context.Context) ([]ResourceInfo, error) {
 	var resources []ResourceInfo
 
-	input := &sagemaker.ListNotebookInstancesInput{}
-	output, err := c.client.ListNotebookInstances(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, notebook := range output.NotebookInstances {
-		if notebook.NotebookInstanceStatus == types.NotebookInstanceStatusInService {
-			resources = append(resources, ResourceInfo{
-				Name:         *notebook.NotebookInstanceName,
-				Status:       string(notebook.NotebookInstanceStatus),
-				InstanceType: string(notebook.InstanceType),
-				CreationTime: *notebook.CreationTime,
-				VolumeSize:   0, // Simplified version doesn't fetch volume size
-			})
+	retrier := retry.NewRetrier(retry.DefaultConfig)
+	err := retrier.Do(ctx, func() error {
+		input := &sagemaker.ListNotebookInstancesInput{}
+		output, err := c.client.ListNotebookInstances(ctx, input)
+		if err != nil {
+			return WrapError(err)
 		}
-	}
 
-	return resources, nil
+		resources = make([]ResourceInfo, 0, len(output.NotebookInstances))
+		for _, notebook := range output.NotebookInstances {
+			if notebook.NotebookInstanceStatus == types.NotebookInstanceStatusInService {
+				resources = append(resources, ResourceInfo{
+					Name:         *notebook.NotebookInstanceName,
+					Status:       string(notebook.NotebookInstanceStatus),
+					InstanceType: string(notebook.InstanceType),
+					CreationTime: *notebook.CreationTime,
+					VolumeSize:   0, // Simplified version doesn't fetch volume size
+				})
+			}
+		}
+
+		return nil
+	})
+
+	return resources, err
 }
 
 // ListStudioApps returns only running studio applications
 func (c *Client) ListStudioApps(ctx context.Context) ([]ResourceInfo, error) {
 	var resources []ResourceInfo
 
-	input := &sagemaker.ListAppsInput{}
-	output, err := c.client.ListApps(ctx, input)
-	if err != nil {
-		return nil, err
-	}
+	retrier := retry.NewRetrier(retry.DefaultConfig)
+	err := retrier.Do(ctx, func() error {
+		input := &sagemaker.ListAppsInput{}
+		output, err := c.client.ListApps(ctx, input)
+		if err != nil {
+			return WrapError(err)
+		}
 
-	for _, app := range output.Apps {
-		if app.Status == types.AppStatusInService {
-			// Defensive nil checks
-			var name, userProfile, appType, instanceType string
-			var creationTime time.Time
+		resources = make([]ResourceInfo, 0, len(output.Apps))
+		for _, app := range output.Apps {
+			if app.Status == types.AppStatusInService {
+				// Defensive nil checks
+				var name, userProfile, appType, instanceType string
+				var creationTime time.Time
 
-			if app.AppName != nil {
-				name = *app.AppName
-			}
+				if app.AppName != nil {
+					name = *app.AppName
+				}
 
-			if app.UserProfileName != nil {
-				userProfile = *app.UserProfileName
-			}
+				if app.UserProfileName != nil {
+					userProfile = *app.UserProfileName
+				}
 
-			if app.CreationTime != nil {
-				creationTime = *app.CreationTime
-			}
+				if app.CreationTime != nil {
+					creationTime = *app.CreationTime
+				}
 
-			// Handle potential nil ResourceSpec
-			if app.ResourceSpec != nil {
-				instanceType = string(app.ResourceSpec.InstanceType)
-			}
+				// Handle potential nil ResourceSpec
+				if app.ResourceSpec != nil {
+					instanceType = string(app.ResourceSpec.InstanceType)
+				}
 
-			appType = string(app.AppType)
+				appType = string(app.AppType)
 
-			// Only add resource if we have a meaningful name
-			if name != "" {
-				resources = append(resources, ResourceInfo{
-					Name:         name,
-					Status:       string(app.Status),
-					InstanceType: instanceType,
-					CreationTime: creationTime,
-					UserProfile:  userProfile,
-					AppType:      appType,
-				})
+				// Only add resource if we have a meaningful name
+				if name != "" {
+					resources = append(resources, ResourceInfo{
+						Name:         name,
+						Status:       string(app.Status),
+						InstanceType: instanceType,
+						CreationTime: creationTime,
+						UserProfile:  userProfile,
+						AppType:      appType,
+					})
+				}
 			}
 		}
-	}
 
-	return resources, nil
+		return nil
+	})
+
+	return resources, err
 }
 
 // ResourceInfo contains common fields for SageMaker resources
