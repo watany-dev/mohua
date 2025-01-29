@@ -5,7 +5,7 @@ GOCMD=go
 GOBUILD=$(GOCMD) build
 GOTEST=$(GOCMD) test
 GOMOD=$(GOCMD) mod
-BINARY_NAME=sagemaker-cost-calculator
+BINARY_NAME=mohua
 
 # Directories
 SRC_DIR=.
