@@ -88,7 +88,7 @@ func TestListStudioApps_NilFields(t *testing.T) {
 						ResourceSpec: nil,
 					},
 					{
-						// Another app with some fields populated
+						// Old Studio app with some fields populated
 						Status:     types.AppStatusInService,
 						AppType:    types.AppTypeJupyterServer,
 						AppName:    aws.String("TestApp"),
@@ -96,6 +96,18 @@ func TestListStudioApps_NilFields(t *testing.T) {
 						UserProfileName: aws.String("TestUser"),
 						ResourceSpec: &types.ResourceSpec{
 							InstanceType: types.AppInstanceType("ml.t3.medium"),
+						},
+					},
+					{
+						// New Studio app with space name
+						Status:     types.AppStatusInService,
+						AppType:    types.AppTypeJupyterLab,
+						AppName:    aws.String("NewTestApp"),
+						CreationTime: aws.Time(time.Now()),
+						UserProfileName: aws.String("NewTestUser"),
+						SpaceName:   aws.String("TestSpace"),
+						ResourceSpec: &types.ResourceSpec{
+							InstanceType: types.AppInstanceType("ml.t3.large"),
 						},
 					},
 				},
@@ -113,14 +125,75 @@ func TestListStudioApps_NilFields(t *testing.T) {
 
 	// Assert expectations
 	assert.NoError(t, err)
-	assert.Len(t, resources, 1, "Should only include apps with non-nil names")
+	assert.Len(t, resources, 2, "Should include apps with non-nil names")
 	
-	// Verify the populated app's details
-	if len(resources) > 0 {
-		assert.Equal(t, "TestApp", resources[0].Name)
-		assert.Equal(t, "TestUser", resources[0].UserProfile)
-		assert.Equal(t, "ml.t3.medium", resources[0].InstanceType)
+	// Verify the old Studio app details
+	oldStudioApp := resources[0]
+	assert.Equal(t, "TestApp", oldStudioApp.Name)
+	assert.Equal(t, "TestUser", oldStudioApp.UserProfile)
+	assert.Equal(t, "ml.t3.medium", oldStudioApp.InstanceType)
+	assert.Equal(t, "JupyterServer", oldStudioApp.AppType)
+	assert.Equal(t, "Old Studio (JupyterServer)", oldStudioApp.StudioType)
+	assert.Empty(t, oldStudioApp.SpaceName)
+
+	// Verify the new Studio app details
+	newStudioApp := resources[1]
+	assert.Equal(t, "NewTestApp", newStudioApp.Name)
+	assert.Equal(t, "NewTestUser", newStudioApp.UserProfile)
+	assert.Equal(t, "ml.t3.large", newStudioApp.InstanceType)
+	assert.Equal(t, "JupyterLab", newStudioApp.AppType)
+	assert.Equal(t, "New Studio (JupyterLab)", newStudioApp.StudioType)
+	assert.Equal(t, "TestSpace", newStudioApp.SpaceName)
+}
+
+func TestListStudioApps_StatusHandling(t *testing.T) {
+	// Prepare a context
+	ctx := context.Background()
+
+	// Create a mock client with mixed statuses
+	mockClient := &MockSageMakerClient{
+		listAppsFunc: func(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error) {
+			return &sagemaker.ListAppsOutput{
+				Apps: []types.AppDetails{
+					{
+						// Running old Studio app
+						Status:     types.AppStatusInService,
+						AppType:    types.AppTypeJupyterServer,
+						AppName:    aws.String("RunningOldApp"),
+						CreationTime: aws.Time(time.Now()),
+						UserProfileName: aws.String("OldUser"),
+					},
+					{
+						// Stopped new Studio app
+						Status:     types.AppStatusDeleted,
+						AppType:    types.AppTypeJupyterLab,
+						AppName:    aws.String("StoppedNewApp"),
+						CreationTime: aws.Time(time.Now().Add(-1 * time.Hour)),
+						UserProfileName: aws.String("NewUser"),
+						SpaceName:   aws.String("StoppedSpace"),
+					},
+				},
+			}, nil
+		},
 	}
+
+	// Create a Client with the mock
+	client := &Client{
+		client: mockClient,
+	}
+
+	// Call the method
+	resources, err := client.ListStudioApps(ctx)
+
+	// Assert expectations
+	assert.NoError(t, err)
+	assert.Len(t, resources, 1, "Should only include InService apps")
+	
+	// Verify the running old Studio app details
+	runningOldApp := resources[0]
+	assert.Equal(t, "RunningOldApp", runningOldApp.Name)
+	assert.Equal(t, "InService", runningOldApp.Status)
+	assert.Equal(t, "Old Studio (JupyterServer)", runningOldApp.StudioType)
 }
 
 func TestConcurrentResourceListing(t *testing.T) {

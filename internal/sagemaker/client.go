@@ -148,9 +148,10 @@ func (c *Client) ListStudioApps(ctx context.Context) ([]ResourceInfo, error) {
 
 		resources = make([]ResourceInfo, 0, len(output.Apps))
 		for _, app := range output.Apps {
+			// Only include InService status apps
 			if app.Status == types.AppStatusInService {
 				// Defensive nil checks
-				var name, userProfile, appType, instanceType string
+				var name, userProfile, appType, instanceType, spaceName, studioType string
 				var creationTime time.Time
 
 				if app.AppName != nil {
@@ -170,7 +171,22 @@ func (c *Client) ListStudioApps(ctx context.Context) ([]ResourceInfo, error) {
 					instanceType = string(app.ResourceSpec.InstanceType)
 				}
 
+				// Determine Studio type and space name
 				appType = string(app.AppType)
+				
+				switch app.AppType {
+				case types.AppTypeJupyterServer:
+					studioType = "Old Studio (JupyterServer)"
+				case types.AppTypeJupyterLab:
+					studioType = "New Studio (JupyterLab)"
+				default:
+					studioType = "Unknown Studio"
+				}
+
+				// Add SpaceName for new Studio apps
+				if app.SpaceName != nil {
+					spaceName = *app.SpaceName
+				}
 
 				// Only add resource if we have a meaningful name
 				if name != "" {
@@ -181,6 +197,8 @@ func (c *Client) ListStudioApps(ctx context.Context) ([]ResourceInfo, error) {
 						CreationTime: creationTime,
 						UserProfile:  userProfile,
 						AppType:      appType,
+						SpaceName:    spaceName,
+						StudioType:   studioType,
 					})
 				}
 			}
@@ -202,4 +220,6 @@ type ResourceInfo struct {
 	VolumeSize    int
 	UserProfile   string
 	AppType       string
+	SpaceName     string    // New field for Studio spaces
+	StudioType    string    // New field for JupyterServer/JupyterLab
 }
