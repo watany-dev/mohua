@@ -7,14 +7,14 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"sagemaker-monitor/internal/cost"
-	"sagemaker-monitor/internal/display"
-	"sagemaker-monitor/internal/sagemaker"
+	"mohua/internal/cost"
+	"mohua/internal/display"
+	"mohua/internal/sagemaker"
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "sagemaker-monitor",
+	Use:   "mohua",
 	Short: "Monitor AWS SageMaker compute resources and their costs",
 	Long: `A monitoring tool for AWS SageMaker that helps track running compute resources
 and their associated costs. It provides information about:

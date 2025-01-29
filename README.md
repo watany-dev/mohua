@@ -36,14 +36,14 @@ This tool is a lightweight implementation focused on basic monitoring and estima
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/sagemaker-monitor.git
-cd sagemaker-monitor
+git clone https://github.com/yourusername/mohua.git
+cd mohua
 
 # Install dependencies
 go mod tidy
 
 # Build
-go build -o sagemaker-monitor
+go build -o mohua
 
 # Optional: Install
 go install
@@ -51,7 +51,7 @@ go install
 
 ### Method 2: Download Binary
 
-Download the latest binary from the [Releases](https://github.com/yourusername/sagemaker-monitor/releases) page.
+Download the latest binary from the [Releases](https://github.com/yourusername/mohua/releases) page.
 
 ## Usage
 
@@ -59,10 +59,10 @@ Download the latest binary from the [Releases](https://github.com/yourusername/s
 
 ```bash
 # Display in table format
-./sagemaker-monitor --region us-east-1
+./mohua --region us-east-1
 
 # Output in JSON format
-./sagemaker-monitor --region us-east-1 --json
+./mohua --region us-east-1 --json
 ```
 
 ### Command Line Options

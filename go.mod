@@ -1,4 +1,4 @@
-module sagemaker-monitor
+module mohua
 
 go 1.23.4
 

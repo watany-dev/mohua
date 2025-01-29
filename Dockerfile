@@ -15,7 +15,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o sagemaker-monitor
+RUN CGO_ENABLED=0 GOOS=linux go build -o mohua
 
 # Final stage
 FROM alpine:latest
@@ -23,11 +23,11 @@ FROM alpine:latest
 WORKDIR /root/
 
 # Copy the pre-built binary file and configs
-COPY --from=builder /app/sagemaker-monitor .
+COPY --from=builder /app/mohua .
 COPY --from=builder /app/configs/pricing.yaml ./configs/
 
 # Install ca-certificates for AWS SDK
 RUN apk add --no-cache ca-certificates
 
 # Set entrypoint
-ENTRYPOINT ["./sagemaker-monitor"]
+ENTRYPOINT ["./mohua"]
