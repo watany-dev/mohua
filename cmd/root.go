@@ -11,13 +11,16 @@ import (
 	"mohua/internal/sagemaker"
 )
 
-type NoResourcesError struct{}
+type NoResourcesError struct {
+	Region      string
+	DefaultUsed bool
+}
 
 func (e *NoResourcesError) Error() string {
-	return "No SageMaker resources found in the specified region. Please verify:\n" +
-		"- AWS credentials are correctly configured\n" +
-		"- You have permission to access SageMaker resources\n" +
-		"- The specified region contains SageMaker resources"
+	if e.DefaultUsed {
+		return fmt.Sprintf("No SageMaker resources found in default region %s.", e.Region)
+	}
+	return fmt.Sprintf("No SageMaker resources found in specified region %s.", e.Region)
 }
 
 // ResourceResult holds the results and errors from API calls
@@ -45,7 +48,7 @@ and their associated costs.`,
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 func Execute() error {
-	rootCmd.PersistentFlags().StringVarP(&region, "region", "r", "", "AWS region (optional, defaults to AWS_REGION env var or us-east-1)")
+	rootCmd.PersistentFlags().StringVarP(&region, "region", "r", "", "AWS region (optional, defaults to AWS CLI configuration)")
 	rootCmd.PersistentFlags().BoolVarP(&jsonOutput, "json", "j", false, "Output in JSON format")
 	
 	return rootCmd.Execute()
@@ -200,7 +203,12 @@ func runMonitor() error {
 
 	// If no resources found, return a NoResourcesError
 	if !resourceFound {
-		return &NoResourcesError{}
+		// Get the effective region from the client
+		effectiveRegion := client.GetRegion()
+		if effectiveRegion == "" {
+			effectiveRegion = "configured region" // Fallback message
+		}
+		return &NoResourcesError{Region: effectiveRegion, DefaultUsed: region == ""}
 	}
 
 	// Print footer
