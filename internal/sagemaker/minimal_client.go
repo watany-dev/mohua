@@ -10,9 +10,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker/types"
 )
 
+// SageMakerClientInterface defines the methods used by MinimalClient
+type SageMakerClientInterface interface {
+	ListApps(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error)
+	ListEndpoints(ctx context.Context, params *sagemaker.ListEndpointsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListEndpointsOutput, error)
+	ListNotebookInstances(ctx context.Context, params *sagemaker.ListNotebookInstancesInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListNotebookInstancesOutput, error)
+}
+
 // MinimalClient implements only the necessary SageMaker API operations
 type MinimalClient struct {
-	client *sagemaker.Client
+	client SageMakerClientInterface
 }
 
 // NewMinimalClient creates a new minimal SageMaker client
@@ -92,14 +99,40 @@ func (c *MinimalClient) ListStudioApps(ctx context.Context) ([]ResourceInfo, err
 
 	for _, app := range output.Apps {
 		if app.Status == types.AppStatusInService {
-			resources = append(resources, ResourceInfo{
-				Name:         *app.AppName,
-				Status:       string(app.Status),
-				InstanceType: string(app.ResourceSpec.InstanceType),
-				CreationTime: *app.CreationTime,
-				UserProfile:  *app.UserProfileName,
-				AppType:     string(app.AppType),
-			})
+			// Defensive nil checks
+			var name, userProfile, appType, instanceType string
+			var creationTime time.Time
+
+			if app.AppName != nil {
+				name = *app.AppName
+			}
+
+			if app.UserProfileName != nil {
+				userProfile = *app.UserProfileName
+			}
+
+			if app.CreationTime != nil {
+				creationTime = *app.CreationTime
+			}
+
+			// Handle potential nil ResourceSpec
+			if app.ResourceSpec != nil {
+				instanceType = string(app.ResourceSpec.InstanceType)
+			}
+
+			appType = string(app.AppType)
+
+			// Only add resource if we have a meaningful name
+			if name != "" {
+				resources = append(resources, ResourceInfo{
+					Name:         name,
+					Status:       string(app.Status),
+					InstanceType: instanceType,
+					CreationTime: creationTime,
+					UserProfile:  userProfile,
+					AppType:      appType,
+				})
+			}
 		}
 	}
 
