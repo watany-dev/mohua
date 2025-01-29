@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker"
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker/types"
+	"github.com/aws/smithy-go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,6 +38,7 @@ type MockSageMakerClient struct {
 	listAppsFunc         func(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error)
 	listEndpointsFunc    func(ctx context.Context, params *sagemaker.ListEndpointsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListEndpointsOutput, error)
 	listNotebookFunc     func(ctx context.Context, params *sagemaker.ListNotebookInstancesInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListNotebookInstancesOutput, error)
+	listDomainsFunc      func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error)
 }
 
 func (m *MockSageMakerClient) ListApps(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error) {
@@ -58,6 +60,13 @@ func (m *MockSageMakerClient) ListNotebookInstances(ctx context.Context, params 
 		return m.listNotebookFunc(ctx, params, optFns...)
 	}
 	return &sagemaker.ListNotebookInstancesOutput{}, nil
+}
+
+func (m *MockSageMakerClient) ListDomains(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
+	if m.listDomainsFunc != nil {
+		return m.listDomainsFunc(ctx, params, optFns...)
+	}
+	return &sagemaker.ListDomainsOutput{}, nil
 }
 
 func TestListStudioApps_NilFields(t *testing.T) {
@@ -206,4 +215,47 @@ func TestConcurrentResourceListing(t *testing.T) {
 	// Total time should be less than sequential calls (sum of delays)
 	// Allowing some buffer for goroutine overhead
 	assert.Less(t, totalTime.Milliseconds(), int64(250), "Concurrent calls should be faster than sequential")
+}
+
+func TestValidateConfiguration(t *testing.T) {
+	ctx := context.Background()
+
+	// Test case 1: Successful configuration
+	mockClientSuccess := &MockSageMakerClient{
+		listDomainsFunc: func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
+			return &sagemaker.ListDomainsOutput{}, nil
+		},
+	}
+	clientSuccess := &Client{client: mockClientSuccess}
+	hasResources, err := clientSuccess.ValidateConfiguration(ctx)
+	assert.NoError(t, err)
+	assert.True(t, hasResources)
+
+	// Test case 2: Access Denied
+	mockClientAccessDenied := &MockSageMakerClient{
+		listDomainsFunc: func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
+			return nil, &smithy.GenericAPIError{
+				Code:    "AccessDeniedException",
+				Message: "Access Denied",
+			}
+		},
+	}
+	clientAccessDenied := &Client{client: mockClientAccessDenied}
+	hasResources, err = clientAccessDenied.ValidateConfiguration(ctx)
+	assert.NoError(t, err)
+	assert.False(t, hasResources)
+
+	// Test case 3: Invalid Token
+	mockClientInvalidToken := &MockSageMakerClient{
+		listDomainsFunc: func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
+			return nil, &smithy.GenericAPIError{
+				Code:    "InvalidClientTokenId",
+				Message: "Invalid Token",
+			}
+		},
+	}
+	clientInvalidToken := &Client{client: mockClientInvalidToken}
+	hasResources, err = clientInvalidToken.ValidateConfiguration(ctx)
+	assert.NoError(t, err)
+	assert.False(t, hasResources)
 }

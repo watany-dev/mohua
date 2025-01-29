@@ -2,12 +2,15 @@ package sagemaker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker"
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker/types"
+	"github.com/aws/smithy-go"
 	"mohua/internal/retry"
 )
 
@@ -16,6 +19,7 @@ type SageMakerClientInterface interface {
 	ListApps(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error)
 	ListEndpoints(ctx context.Context, params *sagemaker.ListEndpointsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListEndpointsOutput, error)
 	ListNotebookInstances(ctx context.Context, params *sagemaker.ListNotebookInstancesInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListNotebookInstancesOutput, error)
+	ListDomains(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error)
 }
 
 // Client implements only the necessary SageMaker API operations
@@ -38,6 +42,33 @@ func NewClient(region string) (*Client, error) {
 	return &Client{
 		client: sagemaker.NewFromConfig(cfg),
 	}, nil
+}
+
+// ValidateConfiguration checks if the AWS configuration is valid and resources are likely to exist
+func (c *Client) ValidateConfiguration(ctx context.Context) (bool, error) {
+	// Check if we can list domains as a lightweight way to validate configuration
+	input := &sagemaker.ListDomainsInput{
+		MaxResults: aws.Int32(1), // We only need to check if we can list
+	}
+
+	_, err := c.client.ListDomains(ctx, input)
+	if err != nil {
+		// If it's an authorization or configuration error, return false
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) {
+			switch apiErr.ErrorCode() {
+			case "AccessDeniedException", 
+				 "InvalidClientTokenId", 
+				 "SignatureDoesNotMatch", 
+				 "ExpiredToken":
+				return false, nil
+			}
+		}
+		// For other errors, return the error
+		return false, err
+	}
+
+	return true, nil
 }
 
 // ListEndpoints returns only active endpoints
