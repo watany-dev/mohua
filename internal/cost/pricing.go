@@ -1,13 +1,6 @@
 package cost
 
-import (
-	"fmt"
-	"os"
-
-	"gopkg.in/yaml.v3"
-)
-
-// PricingData represents the structure of the pricing.yaml file
+// PricingData represents the pricing data structure
 type PricingData struct {
 	Endpoints map[string]float64 `yaml:"endpoints"`
 	Notebooks map[string]float64 `yaml:"notebooks"`
@@ -17,19 +10,60 @@ type PricingData struct {
 	} `yaml:"storage"`
 }
 
-// LoadPricing loads pricing data from the YAML file
+// LoadPricing returns the hardcoded pricing data
 func LoadPricing(filepath string) (*PricingData, error) {
-	data, err := os.ReadFile(filepath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read pricing file: %w", err)
-	}
-
-	var pricing PricingData
-	if err := yaml.Unmarshal(data, &pricing); err != nil {
-		return nil, fmt.Errorf("failed to parse pricing data: %w", err)
-	}
-
-	return &pricing, nil
+	return &PricingData{
+		Endpoints: map[string]float64{
+			"ml.t2.medium":   0.05,
+			"ml.t2.large":    0.10,
+			"ml.t2.xlarge":   0.20,
+			"ml.t3.medium":   0.05,
+			"ml.t3.large":    0.10,
+			"ml.t3.xlarge":   0.20,
+			"ml.m4.xlarge":   0.28,
+			"ml.m5.large":    0.13,
+			"ml.m5.xlarge":   0.27,
+			"ml.m5.2xlarge":  0.54,
+			"ml.c5.large":    0.12,
+			"ml.c5.xlarge":   0.24,
+			"ml.c5.2xlarge":  0.48,
+			"ml.p3.2xlarge":  3.825,
+			"ml.g4dn.xlarge": 0.736,
+		},
+		Notebooks: map[string]float64{
+			"ml.t2.medium":   0.05,
+			"ml.t2.large":    0.10,
+			"ml.t2.xlarge":   0.20,
+			"ml.t3.medium":   0.05,
+			"ml.t3.large":    0.10,
+			"ml.t3.xlarge":   0.20,
+			"ml.m4.xlarge":   0.28,
+			"ml.m5.large":    0.13,
+			"ml.m5.xlarge":   0.27,
+			"ml.m5.2xlarge":  0.54,
+			"ml.c5.large":    0.12,
+			"ml.c5.xlarge":   0.24,
+			"ml.c5.2xlarge":  0.48,
+			"ml.p3.2xlarge":  3.825,
+			"ml.g4dn.xlarge": 0.736,
+		},
+		Studio: map[string]float64{
+			"ml.t3.medium":   0.05,
+			"ml.m5.large":    0.13,
+			"ml.m5.xlarge":   0.27,
+			"ml.m5.2xlarge":  0.54,
+			"ml.c5.large":    0.12,
+			"ml.c5.xlarge":   0.24,
+			"ml.c5.2xlarge":  0.48,
+			"ml.g4dn.xlarge": 0.736,
+			"ml.p3.2xlarge":  3.825,
+		},
+		Storage: struct {
+			EBS float64 `yaml:"ebs"`
+		}{
+			EBS: 0.10,
+		},
+	}, nil
 }
 
 // GetEndpointPrice returns the hourly price for an endpoint instance type

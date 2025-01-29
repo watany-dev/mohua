@@ -12,41 +12,34 @@ import (
 	"sagemaker-monitor/internal/sagemaker"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
+var (
+	region    string
+	jsonOutput bool
+)
+
+// minimalRootCmd represents the base command when called without any subcommands
+var minimalRootCmd = &cobra.Command{
 	Use:   "sagemaker-monitor",
 	Short: "Monitor AWS SageMaker compute resources and their costs",
 	Long: `A monitoring tool for AWS SageMaker that helps track running compute resources
-and their associated costs. It provides information about:
-
-- Endpoints
-- Notebook Instances
-- Studio Applications
-- Running Jobs
-
-The tool shows current status, running time, and cost projections for each resource.`,
+and their associated costs.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runMonitor()
+		return runMinimalMonitor()
 	},
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+// ExecuteMinimal adds all child commands to the root command and sets flags appropriately.
+func ExecuteMinimal() error {
+	minimalRootCmd.PersistentFlags().StringVarP(&region, "region", "r", "", "AWS region (required)")
+	minimalRootCmd.PersistentFlags().BoolVarP(&jsonOutput, "json", "j", false, "Output in JSON format")
+	minimalRootCmd.MarkPersistentFlagRequired("region")
+	
+	return minimalRootCmd.Execute()
 }
 
-func init() {
-	rootCmd.PersistentFlags().StringVarP(&region, "region", "r", "", "AWS region (required)")
-	rootCmd.PersistentFlags().BoolVarP(&jsonOutput, "json", "j", false, "Output in JSON format")
-	rootCmd.MarkPersistentFlagRequired("region")
-}
-
-func runMonitor() error {
-	// Create SageMaker client
-	client, err := sagemaker.NewClient(region)
+func runMinimalMonitor() error {
+	// Create minimal SageMaker client
+	client, err := sagemaker.NewMinimalClient(region)
 	if err != nil {
 		return fmt.Errorf("failed to create SageMaker client: %w", err)
 	}
