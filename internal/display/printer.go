@@ -3,6 +3,8 @@ package display
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/fatih/color"
@@ -20,56 +22,60 @@ type ResourceInfo struct {
 // Printer handles the formatting and display of resource information
 type Printer struct {
 	useJSON bool
-	resources []ResourceInfo
+	output  io.Writer
+	isFirstResource bool
 }
 
 // NewPrinter creates a new printer instance
 func NewPrinter(useJSON bool) *Printer {
 	return &Printer{
 		useJSON: useJSON,
+		output:  os.Stdout,
+		isFirstResource: true,
 	}
 }
 
-// AddResource adds a resource to be printed
-func (p *Printer) AddResource(info ResourceInfo) {
-	p.resources = append(p.resources, info)
-}
-
-// Print outputs all resources in the specified format
-func (p *Printer) Print() {
+// PrintHeader prepares the output for resource listing
+func (p *Printer) PrintHeader() {
 	if p.useJSON {
-		p.printJSON()
+		fmt.Fprint(p.output, "[\n")
 	} else {
-		p.printTable()
+		headerFmt := color.New(color.FgGreen, color.Bold).SprintfFunc()
+		fmt.Fprintf(p.output, "%s\n", headerFmt(
+			"%-15s %-30s %-12s %-15s %-15s",
+			"Type", "Name", "Status", "Instance", "Running Time",
+		))
+		fmt.Fprintln(p.output, strings.Repeat("-", 120))
 	}
 }
 
-// printJSON outputs the resources in JSON format
-func (p *Printer) printJSON() {
-	data, err := json.MarshalIndent(p.resources, "", "  ")
+// PrintResource outputs a single resource
+func (p *Printer) PrintResource(info ResourceInfo) {
+	if p.useJSON {
+		p.printJSONResource(info)
+	} else {
+		p.printTableResource(info)
+	}
+}
+
+// printJSONResource outputs a single resource in JSON format
+func (p *Printer) printJSONResource(info ResourceInfo) {
+	if !p.isFirstResource {
+		fmt.Fprint(p.output, ",\n")
+	}
+	
+	data, err := json.Marshal(info)
 	if err != nil {
-		fmt.Printf("Error marshaling JSON: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error marshaling JSON: %v\n", err)
 		return
 	}
-	fmt.Println(string(data))
+	fmt.Fprint(p.output, "  ", string(data))
+	
+	p.isFirstResource = false
 }
 
-// printTable outputs the resources in a formatted table
-func (p *Printer) printTable() {
-	if len(p.resources) == 0 {
-		color.Yellow("No active SageMaker resources found")
-		return
-	}
-
-	// Print header
-	headerFmt := color.New(color.FgGreen, color.Bold).SprintfFunc()
-	fmt.Printf("%s\n", headerFmt(
-		"%-15s %-30s %-12s %-15s %-15s",
-		"Type", "Name", "Status", "Instance", "Running Time",
-	))
-	fmt.Println(strings.Repeat("-", 120))
-
-	// Print resources
+// printTableResource outputs a single resource in table format
+func (p *Printer) printTableResource(info ResourceInfo) {
 	statusColor := map[string]func(a ...interface{}) string{
 		"InService":  color.New(color.FgGreen).SprintFunc(),
 		"Running":    color.New(color.FgGreen).SprintFunc(),
@@ -78,23 +84,27 @@ func (p *Printer) printTable() {
 		"Deleting":   color.New(color.FgRed).SprintFunc(),
 	}
 
-	for _, r := range p.resources {
-		status := r.Status
-		if colorFunc, ok := statusColor[status]; ok {
-			status = colorFunc(status)
-		}
-
-		fmt.Printf("%-15s %-30s %-12s %-15s %-15s\n",
-			r.ResourceType,
-			truncateString(r.Name, 29),
-			status,
-			r.InstanceType,
-			r.RunningTime,
-		)
+	status := info.Status
+	if colorFunc, ok := statusColor[status]; ok {
+		status = colorFunc(status)
 	}
 
-	// Print summary
-	fmt.Println(strings.Repeat("-", 120))
+	fmt.Printf("%-15s %-30s %-12s %-15s %-15s\n",
+		info.ResourceType,
+		truncateString(info.Name, 29),
+		status,
+		info.InstanceType,
+		info.RunningTime,
+	)
+}
+
+// PrintFooter finalizes the output
+func (p *Printer) PrintFooter() {
+	if p.useJSON {
+		fmt.Fprint(p.output, "\n]\n")
+	} else {
+		fmt.Fprintln(p.output, strings.Repeat("-", 120))
+	}
 }
 
 // Helper function to truncate long strings

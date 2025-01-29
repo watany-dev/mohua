@@ -40,57 +40,88 @@ func runMonitor() error {
 		return fmt.Errorf("failed to create SageMaker client: %w", err)
 	}
 
-	// Create printer
-	printer := display.NewPrinter(jsonOutput)
-
 	ctx := context.Background()
+
+	// Track if any resources were found
+	resourceFound := false
+	var printer *display.Printer
 
 	// Get endpoints
 	endpoints, err := client.ListEndpoints(ctx)
 	if err != nil {
-		fmt.Printf("Warning: Failed to list endpoints: %v\n", err)
+		return fmt.Errorf("failed to list SageMaker resources: %w", err)
 	}
-	for _, endpoint := range endpoints {
-		printer.AddResource(display.ResourceInfo{
-			ResourceType:  "Endpoint",
-			Name:         endpoint.Name,
-			Status:       endpoint.Status,
-			InstanceType: endpoint.InstanceType,
-			RunningTime:  time.Since(endpoint.CreationTime).String(),
-		})
+	if len(endpoints) > 0 {
+		// Create printer only when first resource is found
+		printer = display.NewPrinter(jsonOutput)
+		printer.PrintHeader()
+		resourceFound = true
+
+		for _, endpoint := range endpoints {
+			printer.PrintResource(display.ResourceInfo{
+				ResourceType:  "Endpoint",
+				Name:         endpoint.Name,
+				Status:       endpoint.Status,
+				InstanceType: endpoint.InstanceType,
+				RunningTime:  time.Since(endpoint.CreationTime).String(),
+			})
+		}
 	}
 
 	// Get notebooks
 	notebooks, err := client.ListNotebooks(ctx)
 	if err != nil {
-		fmt.Printf("Warning: Failed to list notebooks: %v\n", err)
+		return fmt.Errorf("failed to list SageMaker resources: %w", err)
 	}
-	for _, notebook := range notebooks {
-		printer.AddResource(display.ResourceInfo{
-			ResourceType:  "Notebook",
-			Name:         notebook.Name,
-			Status:       notebook.Status,
-			InstanceType: notebook.InstanceType,
-			RunningTime:  time.Since(notebook.CreationTime).String(),
-		})
+	if len(notebooks) > 0 {
+		// Create printer only when first resource is found
+		if !resourceFound {
+			printer = display.NewPrinter(jsonOutput)
+			printer.PrintHeader()
+			resourceFound = true
+		}
+
+		for _, notebook := range notebooks {
+			printer.PrintResource(display.ResourceInfo{
+				ResourceType:  "Notebook",
+				Name:         notebook.Name,
+				Status:       notebook.Status,
+				InstanceType: notebook.InstanceType,
+				RunningTime:  time.Since(notebook.CreationTime).String(),
+			})
+		}
 	}
 
 	// Get Studio apps
 	apps, err := client.ListStudioApps(ctx)
 	if err != nil {
-		fmt.Printf("Warning: Failed to list Studio apps: %v\n", err)
+		return fmt.Errorf("failed to list SageMaker resources: %w", err)
 	}
-	for _, app := range apps {	
-		printer.AddResource(display.ResourceInfo{
-			ResourceType:  "Studio",
-			Name:         fmt.Sprintf("%s/%s", app.UserProfile, app.AppType),
-			Status:       app.Status,
-			InstanceType: app.InstanceType,
-			RunningTime:  time.Since(app.CreationTime).String(),
-		})
+	if len(apps) > 0 {
+		// Create printer only when first resource is found
+		if !resourceFound {
+			printer = display.NewPrinter(jsonOutput)
+			printer.PrintHeader()
+			resourceFound = true
+		}
+
+		for _, app := range apps {	
+			printer.PrintResource(display.ResourceInfo{
+				ResourceType:  "Studio",
+				Name:         fmt.Sprintf("%s/%s", app.UserProfile, app.AppType),
+				Status:       app.Status,
+				InstanceType: app.InstanceType,
+				RunningTime:  time.Since(app.CreationTime).String(),
+			})
+		}
 	}
 
-	// Print results
-	printer.Print()
+	// If no resources found, return an error
+	if !resourceFound {
+		return fmt.Errorf("no SageMaker resources found")
+	}
+
+	// Print footer
+	printer.PrintFooter()
 	return nil
 }
