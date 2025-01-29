@@ -1,108 +1,112 @@
 # SageMaker Monitor
 
-## 概要
+## Overview
 
-SageMaker Monitorは、AWS SageMakerのコンピュートリソースを監視し、リアルタイムでコスト分析を行うCLIツールです。このツールは、以下のSageMakerリソースの状態と関連コストを追跡します：
+SageMaker Monitor is a lightweight and efficient CLI tool for monitoring AWS SageMaker compute resources and performing real-time cost analysis. This tool tracks the basic status and associated costs of the following SageMaker resources:
 
-- エンドポイント (Endpoints)
-- ノートブックインスタンス (Notebook Instances)
-- Studioアプリケーション (Studio Applications)
+- Endpoints
+- Notebook Instances
+- Studio Applications
 
-## 主な機能
+## Key Features
 
-- 🔍 リアルタイムのリソース状態監視
-- 💰 詳細なコスト分析
-  - 現在までの累積コスト
-  - 時間あたりのコスト
-  - 月間予測コスト
-- ⚠️ コスト超過警告
-- 📊 柔軟な出力フォーマット（テーブル/JSON）
+- 🔍 Basic resource state monitoring
+- 💰 Simplified cost analysis
+  - Current cumulative costs
+  - Hourly costs
+  - Monthly projected costs
+- 📊 Flexible output formats (Table/JSON)
 
-## 前提条件
+## Important Notes
 
-- Go 1.16以上
-- AWS CLI設定済み
-- AWS IAMアクセス権限
+This tool is a lightweight implementation focused on basic monitoring and estimated cost calculation for SageMaker resources:
+- Endpoint instance types are simplified and do not retrieve detailed configuration information
+- Notebook instance volume size information is omitted
+- For more detailed information, please check the AWS Console
 
-## インストール
+## Prerequisites
 
-### 方法1: ソースからビルド
+- Go 1.16 or higher
+- AWS CLI configured
+- AWS IAM access permissions
+
+## Installation
+
+### Method 1: Build from Source
 
 ```bash
-# リポジトリをクローン
+# Clone the repository
 git clone https://github.com/yourusername/sagemaker-monitor.git
 cd sagemaker-monitor
 
-# 依存関係のインストール
+# Install dependencies
 go mod tidy
 
-# ビルド
+# Build
 go build -o sagemaker-monitor
 
-# インストール（オプション）
+# Optional: Install
 go install
 ```
 
-### 方法2: バイナリダウンロード
+### Method 2: Download Binary
 
-[Releases](https://github.com/yourusername/sagemaker-monitor/releases)ページから最新のバイナリをダウンロードしてください。
+Download the latest binary from the [Releases](https://github.com/yourusername/sagemaker-monitor/releases) page.
 
-## 使用方法
+## Usage
 
-### 基本的な使用方法
+### Basic Usage
 
 ```bash
-# テーブル形式で表示
+# Display in table format
 ./sagemaker-monitor --region us-east-1
 
-# JSON形式で出力
+# Output in JSON format
 ./sagemaker-monitor --region us-east-1 --json
 ```
 
-### コマンドラインオプション
+### Command Line Options
 
-- `--region, -r`: AWS リージョンを指定（必須）
-- `--json, -j`: JSON形式で出力
+- `--region, -r`: Specify AWS region (required)
+- `--json, -j`: Output in JSON format
 
-## 環境設定
+## Environment Configuration
 
-AWS認証情報は以下のいずれかの方法で設定できます：
+AWS credentials can be configured using one of the following methods:
 
-1. AWS CLI設定
+1. AWS CLI configuration
 ```bash
 aws configure
 ```
 
-2. 環境変数
+2. Environment variables
 ```bash
 export AWS_ACCESS_KEY_ID=your_access_key
 export AWS_SECRET_ACCESS_KEY=your_secret_key
 export AWS_DEFAULT_REGION=us-east-1
 ```
 
-3. IAMロール（EC2またはECS）
+3. IAM role (EC2 or ECS)
 
-## 出力例
+## Output Examples
 
-### テーブル形式
+### Table Format
 ```
 Type            Name                          Status     Instance       Running Time  Hourly($)  Current($)  Projected($)
-Endpoint        my-ml-endpoint                InService  ml.m5.xlarge   72h 15m       $1.24      $89.54      $912.80
+Endpoint        my-ml-endpoint                InService  unknown        72h 15m       $1.24      $89.54      $912.80
 Notebook        dev-notebook                  Running    ml.t3.medium   168h 30m      $0.11      $18.54      $81.40
 
 Total Current Cost: $108.08    Projected Monthly Cost: $994.20
-
-WARNING: Endpoint 'my-ml-endpoint' has a high projected monthly cost: $912.80
 ```
 
-### JSON形式
+### JSON Format
 ```json
 [
   {
     "resourceType": "Endpoint",
     "name": "my-ml-endpoint",
     "status": "InService",
-    "instanceType": "ml.m5.xlarge",
+    "instanceType": "unknown",
     "runningTime": "72h 15m",
     "hourlyCost": 1.24,
     "currentCost": 89.54,
@@ -112,25 +116,20 @@ WARNING: Endpoint 'my-ml-endpoint' has a high projected monthly cost: $912.80
 ]
 ```
 
-## 注意事項
+## Troubleshooting
 
-- コスト計算は概算であり、実際の請求額とは異なる場合があります
-- 最新の料金情報に基づいて`configs/pricing.yaml`を定期的に更新してください
+- AWS authentication error: Check IAM policies and permissions
+- Region specification error: Use the correct region name
+- Unexpected results: Verify AWS SDK version
 
-## トラブルシューティング
+## Contributing
 
-- AWS認証エラー: IAMポリシーと権限を確認
-- リージョン指定エラー: 正確なリージョン名を使用
-- 予期せぬ結果: AWS SDKのバージョンを確認
+Pull requests and feature suggestions are welcome. See `CONTRIBUTING.md` for details.
 
-## 貢献
+## License
 
-プルリクエストや機能提案を歓迎します。詳細は`CONTRIBUTING.md`を参照してください。
+This project is published under the [MIT License](LICENSE).
 
-## ライセンス
+## Disclaimer
 
-このプロジェクトは[MITライセンス](LICENSE)の下で公開されています。
-
-## 免責事項
-
-このツールは情報提供のみを目的としており、正確な請求情報については常にAWSコンソールを確認してください。
+This tool is for informational purposes only. Always verify billing information through the AWS Console. Cost calculations are approximate and may differ from actual billing amounts.
