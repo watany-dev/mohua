@@ -31,11 +31,6 @@ jobs:
             goarch: amd64
             output-name: mohua-windows-amd64.exe
 
-          - os: windows-latest
-            goos: windows
-            goarch: arm64
-            output-name: mohua-windows-arm64.exe
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -113,7 +108,6 @@ jobs:
             **/bin/mohua-linux-amd64
             **/bin/mohua-linux-arm64
             **/bin/mohua-windows-amd64.exe
-            **/bin/mohua-windows-arm64.exe
             **/README.md
             **/LICENSE
 
