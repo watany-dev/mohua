@@ -5,21 +5,17 @@ on:
     tags:
       - 'v*'
 
-concurrency: release-${{ github.ref }}
-
 jobs:
   build-release:
     name: Build & Upload Artifacts
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
         go-version: [1.23.x]
         include:
           - os: ubuntu-latest
             output-name: mohua-linux
-          - os: macos-latest
-            output-name: mohua-darwin
           - os: windows-latest
             output-name: mohua-windows.exe
 
@@ -51,10 +47,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y upx-ucl
 
-      - name: Install UPX (macOS)
-        if: matrix.os == 'macos-latest'
-        run: brew install upx
-
       - name: Install UPX (Windows)
         if: matrix.os == 'windows-latest'
         run: choco install upx
@@ -68,8 +60,6 @@ jobs:
 
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
-          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
-            GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
           else
             GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
           fi
@@ -110,9 +100,7 @@ jobs:
         with:
           files: |
             **/bin/mohua-linux
-            **/bin/mohua-darwin
             **/bin/mohua-windows.exe
-            **/configs/pricing.yaml
             **/README.md
             **/LICENSE
         env:
