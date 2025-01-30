@@ -74,7 +74,6 @@ jobs:
           mkdir -p release/bin
           mkdir -p release/configs
           cp ${{ matrix.output-name }} release/bin/
-          cp configs/pricing.yaml release/configs/
           cp README.md release/
           cp LICENSE release/
 
