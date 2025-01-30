@@ -57,6 +57,30 @@ Endpoint        ml-endpoint        InService  ml.t3.medium  72h 15m
 Notebook        dev-notebook       Running    ml.t3.medium  168h 30m
 ```
 
+## Development
+
+### Testing
+
+The project includes both unit tests and integration tests:
+
+```bash
+# Run unit tests only (default)
+make test
+
+# Run integration tests (requires AWS credentials)
+make test-integ
+
+# Run all tests (both unit and integration)
+make test-all
+```
+
+#### Test Organization
+- Unit tests: Tests that don't require AWS credentials
+- Integration tests: Tests that interact with AWS services
+  - Requires valid AWS credentials
+  - Automatically skipped if credentials are not available
+  - Use build tags to separate from unit tests
+
 ## Additional Information
 
 - Refer to [ADR](docs/adr/) for architecture and design details

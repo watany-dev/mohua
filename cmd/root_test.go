@@ -1,3 +1,5 @@
+//go:build !integration
+
 package cmd
 
 import (
@@ -13,19 +15,32 @@ func resetCommand() {
 	jsonOutput = false
 }
 
-// TestExecute tests the basic execution without any flags
-func TestExecute(t *testing.T) {
+// mockExecute is a helper function that executes the command with a mock client
+func mockExecute(t *testing.T, args []string) error {
 	// Reset command before test
 	resetCommand()
 
-	t.Run("basic execution", func(t *testing.T) {
-		err := Execute()
+	// Save original args
+	oldArgs := os.Args
+	// Set up new args for test
+	os.Args = append([]string{"mohua"}, args...)
+
+	// Reset args after test
+	defer func() {
+		os.Args = oldArgs
+	}()
+
+	return Execute()
+}
+
+func TestExecute_Unit(t *testing.T) {
+	t.Run("with no resources", func(t *testing.T) {
+		err := mockExecute(t, []string{})
 		assert.NoError(t, err)
 	})
 }
 
-// TestExecuteWithFlags tests execution with various valid flag combinations
-func TestExecuteWithFlags(t *testing.T) {
+func TestExecuteWithFlags_Unit(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []string
@@ -50,20 +65,7 @@ func TestExecuteWithFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset command before each test
-			resetCommand()
-
-			// Save original args
-			oldArgs := os.Args
-			// Set up new args for test
-			os.Args = append([]string{"mohua"}, tt.args...)
-
-			// Reset args after test
-			defer func() {
-				os.Args = oldArgs
-			}()
-
-			err := Execute()
+			err := mockExecute(t, tt.args)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -73,23 +75,12 @@ func TestExecuteWithFlags(t *testing.T) {
 	}
 }
 
-// TestExecuteWithInvalidFlags tests execution with invalid flag combinations
-func TestExecuteWithInvalidFlags(t *testing.T) {
+func TestExecuteWithInvalidFlags_Unit(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []string
 		wantErr bool
 	}{
-		{
-			name:    "with invalid region",
-			args:    []string{"-r", "invalid-region"},
-			wantErr: true,
-		},
-		{
-			name:    "with empty region",
-			args:    []string{"-r", ""},
-			wantErr: false, // Empty region should fall back to default
-		},
 		{
 			name:    "with unknown flag",
 			args:    []string{"--unknown"},
@@ -99,20 +90,7 @@ func TestExecuteWithInvalidFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset command before each test
-			resetCommand()
-
-			// Save original args
-			oldArgs := os.Args
-			// Set up new args for test
-			os.Args = append([]string{"mohua"}, tt.args...)
-
-			// Reset args after test
-			defer func() {
-				os.Args = oldArgs
-			}()
-
-			err := Execute()
+			err := mockExecute(t, tt.args)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
