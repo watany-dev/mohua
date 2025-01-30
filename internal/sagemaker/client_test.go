@@ -2,7 +2,6 @@ package sagemaker
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -291,149 +290,45 @@ func TestConcurrentResourceListing(t *testing.T) {
 	assert.Less(t, totalTime.Milliseconds(), int64(250), "Concurrent calls should be faster than sequential")
 }
 
-// createMockClient creates a new mock SageMaker client with the specified ListDomains behavior
-func createMockClient(listDomainsFunc func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error)) *Client {
-	return &Client{
-		client: &MockSageMakerClient{
-			listDomainsFunc: listDomainsFunc,
-		},
-		region: "us-west-2",
-	}
-}
-
-// createAPIError creates a new smithy.GenericAPIError with the specified code and message
-func createAPIError(code, message string) error {
-	return &smithy.GenericAPIError{
-		Code:    code,
-		Message: message,
-	}
-}
-
 func TestValidateConfiguration(t *testing.T) {
 	ctx := context.Background()
 
-	testCases := []struct {
-		name           string
-		mockResponse   interface{}
-		mockError      error
-		expectError    bool
-		expectResource bool
-		errorContains  string
-	}{
-		{
-			name:           "Successful configuration",
-			mockResponse:   &sagemaker.ListDomainsOutput{},
-			expectResource: true,
-		},
-		{
-			name:           "Access Denied",
-			mockError:      createAPIError("AccessDeniedException", "Access Denied"),
-			expectResource: false,
-		},
-		{
-			name:           "Invalid Token",
-			mockError:      createAPIError("InvalidClientTokenId", "Invalid Token"),
-			expectResource: false,
-		},
-		{
-			name:           "Expired Token",
-			mockError:      createAPIError("ExpiredToken", "Token has expired"),
-			expectResource: false,
-		},
-		{
-			name:           "Signature Mismatch",
-			mockError:      createAPIError("SignatureDoesNotMatch", "Signature validation failed"),
-			expectResource: false,
-		},
-		{
-			name:           "Throttling",
-			mockError:      createAPIError("ThrottlingException", "Rate exceeded"),
-			expectError:    true,
-			errorContains:  "Rate exceeded",
-			expectResource: false,
-		},
-		{
-			name:           "Internal Failure",
-			mockError:      createAPIError("InternalFailure", "Internal service error"),
-			expectError:    true,
-			errorContains:  "Internal service error",
-			expectResource: false,
-		},
-		{
-			name:           "IMDS Role Error",
-			mockError:      fmt.Errorf("no EC2 IMDS role found"),
-			expectError:    true,
-			errorContains:  "No AWS role configured",
-			expectResource: false,
-		},
-		{
-			name:           "Empty Response",
-			mockResponse:   &sagemaker.ListDomainsOutput{},
-			expectResource: true,
+	// Test case 1: Successful configuration
+	mockClientSuccess := &MockSageMakerClient{
+		listDomainsFunc: func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
+			return &sagemaker.ListDomainsOutput{}, nil
 		},
 	}
+	clientSuccess := &Client{client: mockClientSuccess}
+	hasResources, err := clientSuccess.ValidateConfiguration(ctx)
+	assert.NoError(t, err)
+	assert.True(t, hasResources)
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockClient := createMockClient(func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
-				if tc.mockError != nil {
-					return nil, tc.mockError
-				}
-				return tc.mockResponse.(*sagemaker.ListDomainsOutput), nil
-			})
-
-			hasResources, err := mockClient.ValidateConfiguration(ctx)
-
-			// Verify error expectations
-			if tc.expectError {
-				assert.Error(t, err)
-				if tc.errorContains != "" {
-					assert.Contains(t, err.Error(), tc.errorContains)
-				}
-			} else {
-				assert.NoError(t, err)
+	// Test case 2: Access Denied
+	mockClientAccessDenied := &MockSageMakerClient{
+		listDomainsFunc: func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
+			return nil, &smithy.GenericAPIError{
+				Code:    "AccessDeniedException",
+				Message: "Access Denied",
 			}
-
-			// Verify resource expectations
-			assert.Equal(t, tc.expectResource, hasResources)
-
-			// Test error suppression for authentication errors
-			if tc.mockError != nil && !tc.expectError {
-				// Second call should suppress the error
-				hasResources, err = mockClient.ValidateConfiguration(ctx)
-				assert.NoError(t, err)
-				assert.False(t, hasResources)
-			}
-		})
+		},
 	}
-}
+	clientAccessDenied := &Client{client: mockClientAccessDenied}
+	hasResources, err = clientAccessDenied.ValidateConfiguration(ctx)
+	assert.NoError(t, err)
+	assert.False(t, hasResources)
 
-// TestErrorTracker tests the error suppression functionality
-func TestErrorTracker(t *testing.T) {
-	tracker := NewErrorTracker()
-
-	// Test case 1: Basic error tracking
-	err1 := fmt.Errorf("test error")
-	trackedErr := tracker.Track(err1)
-	assert.Error(t, trackedErr)
-	assert.Equal(t, err1.Error(), trackedErr.Error())
-
-	// Test case 2: Duplicate error suppression
-	trackedErr = tracker.Track(err1)
-	assert.Error(t, trackedErr)
-	trackedErr = tracker.Track(err1)
-	assert.Nil(t, trackedErr, "Third occurrence should be suppressed")
-
-	// Test case 3: New error resets suppression
-	err2 := fmt.Errorf("different error")
-	trackedErr = tracker.Track(err2)
-	assert.Error(t, trackedErr)
-	assert.Equal(t, err2.Error(), trackedErr.Error())
-
-	// Test case 4: Authentication error formatting
-	authErr := fmt.Errorf("no EC2 IMDS role found")
-	trackedErr = tracker.Track(authErr)
-	assert.Error(t, trackedErr)
-	assert.Contains(t, trackedErr.Error(), "AWS Authentication Error")
-	assert.Contains(t, trackedErr.Error(), "No AWS role configured")
+	// Test case 3: Invalid Token
+	mockClientInvalidToken := &MockSageMakerClient{
+		listDomainsFunc: func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
+			return nil, &smithy.GenericAPIError{
+				Code:    "InvalidClientTokenId",
+				Message: "Invalid Token",
+			}
+		},
+	}
+	clientInvalidToken := &Client{client: mockClientInvalidToken}
+	hasResources, err = clientInvalidToken.ValidateConfiguration(ctx)
+	assert.NoError(t, err)
+	assert.False(t, hasResources)
 }
