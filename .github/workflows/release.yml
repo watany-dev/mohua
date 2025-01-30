@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency: release-${{ github.ref }}
+
+jobs:
+  build-release:
+    name: Build & Upload Artifacts
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go-version: [1.23.x]
+        include:
+          - os: ubuntu-latest
+            output-name: mohua-linux
+          - os: macos-latest
+            output-name: mohua-darwin
+          - os: windows-latest
+            output-name: mohua-windows.exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Install UPX (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y upx-ucl
+
+      - name: Install UPX (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install upx
+
+      - name: Install UPX (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install upx
+
+      - name: Build
+        run: |
+          VERSION=$(git describe --tags --always)
+          COMMIT=$(git rev-parse HEAD)
+          BUILD_DATE=$(date -u '+%Y-%m-%d')
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}"
+
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            GOOS=darwin GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
+          else
+            GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
+          fi
+
+          # UPX 圧縮
+          upx --best --lzma ${{ matrix.output-name }}
+
+      - name: Prepare release directory
+        run: |
+          mkdir -p release/bin
+          mkdir -p release/configs
+          cp ${{ matrix.output-name }} release/bin/
+          cp configs/pricing.yaml release/configs/
+          cp README.md release/
+          cp LICENSE release/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output-name }}
+          path: release/
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            **/bin/mohua-linux
+            **/bin/mohua-darwin
+            **/bin/mohua-windows.exe
+            **/configs/pricing.yaml
+            **/README.md
+            **/LICENSE
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
