@@ -13,13 +13,28 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
         go-version: [1.23.x]
         include:
+          # --- Linux ---
           - os: ubuntu-latest
-            output-name: mohua-linux
+            goos: linux
+            goarch: amd64
+            output-name: mohua-linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            output-name: mohua-linux-arm64
+
+          # --- Windows ---
           - os: windows-latest
-            output-name: mohua-windows.exe
+            goos: windows
+            goarch: amd64
+            output-name: mohua-windows-amd64.exe
+
+          - os: windows-latest
+            goos: windows
+            goarch: arm64
+            output-name: mohua-windows-arm64.exe
 
     steps:
       - name: Checkout code
@@ -44,13 +59,13 @@ jobs:
         run: go mod tidy
 
       - name: Install UPX (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.goos == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y upx-ucl
 
       - name: Install UPX (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.goos == 'windows'
         run: choco install upx
 
       - name: Build
@@ -67,13 +82,11 @@ jobs:
             GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
           fi
 
-          # UPX 圧縮
           upx --best --lzma ${{ matrix.output-name }}
 
       - name: Prepare release directory
         run: |
           mkdir -p release/bin
-          mkdir -p release/configs
           cp ${{ matrix.output-name }} release/bin/
           cp README.md release/
           cp LICENSE release/
@@ -101,8 +114,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            **/bin/mohua-linux
-            **/bin/mohua-windows.exe
+            **/bin/mohua-linux-amd64
+            **/bin/mohua-linux-arm64
+            **/bin/mohua-darwin-amd64
+            **/bin/mohua-darwin-arm64
+            **/bin/mohua-windows-amd64.exe
+            **/bin/mohua-windows-arm64.exe
             **/README.md
             **/LICENSE
         env:
