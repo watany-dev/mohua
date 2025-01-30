@@ -54,6 +54,7 @@ jobs:
         run: choco install upx
 
       - name: Build
+        shell: bash # for Windows 
         run: |
           VERSION=$(git describe --tags --always)
           COMMIT=$(git rev-parse HEAD)
