@@ -11,18 +11,6 @@ import (
 	"mohua/internal/sagemaker"
 )
 
-type NoResourcesError struct {
-	Region      string
-	DefaultUsed bool
-}
-
-func (e *NoResourcesError) Error() string {
-	if e.DefaultUsed {
-		return fmt.Sprintf("No SageMaker resources found in default region %s.", e.Region)
-	}
-	return fmt.Sprintf("No SageMaker resources found in specified region %s.", e.Region)
-}
-
 // ResourceResult holds the results and errors from API calls
 type ResourceResult struct {
 	Resources []sagemaker.ResourceInfo
@@ -63,13 +51,19 @@ func runMonitor() error {
 
 	ctx := context.Background()
 
-	// Validate AWS configuration and check if resources are likely to exist
+	// Validate AWS configuration
 	hasConfiguredResources, err := client.ValidateConfiguration(ctx)
 	if err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
+
+	// Create printer for output
+	printer := display.NewPrinter(jsonOutput)
+
+	// If no resources are configured, print message and return
 	if !hasConfiguredResources {
-		return &NoResourcesError{}
+		printer.PrintNoResources(client.GetRegion())
+		return nil
 	}
 
 	// Create channels for each resource type
@@ -109,7 +103,6 @@ func runMonitor() error {
 
 	// Track if any resources were found and collect errors
 	resourceFound := false
-	var printer *display.Printer
 	var firstError error
 
 	// Process endpoints
@@ -125,7 +118,6 @@ func runMonitor() error {
 		}
 	} else if len(result.Resources) > 0 {
 		if !resourceFound {
-			printer = display.NewPrinter(jsonOutput)
 			printer.PrintHeader()
 			resourceFound = true
 		}
@@ -153,7 +145,6 @@ func runMonitor() error {
 		}
 	} else if len(result.Resources) > 0 {
 		if !resourceFound {
-			printer = display.NewPrinter(jsonOutput)
 			printer.PrintHeader()
 			resourceFound = true
 		}
@@ -181,7 +172,6 @@ func runMonitor() error {
 		}
 	} else if len(result.Resources) > 0 {
 		if !resourceFound {
-			printer = display.NewPrinter(jsonOutput)
 			printer.PrintHeader()
 			resourceFound = true
 		}
@@ -201,17 +191,13 @@ func runMonitor() error {
 		return firstError
 	}
 
-	// If no resources found, return a NoResourcesError
+	// If no resources found, print no resources message
 	if !resourceFound {
-		// Get the effective region from the client
-		effectiveRegion := client.GetRegion()
-		if effectiveRegion == "" {
-			effectiveRegion = "configured region" // Fallback message
-		}
-		return &NoResourcesError{Region: effectiveRegion, DefaultUsed: region == ""}
+		printer.PrintNoResources(client.GetRegion())
+		return nil
 	}
 
-	// Print footer
+	// Print footer if resources were found
 	printer.PrintFooter()
 	return nil
 }
