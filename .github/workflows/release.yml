@@ -105,11 +105,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            **/bin/mohua-linux-amd64
-            **/bin/mohua-linux-arm64
-            **/bin/mohua-windows-amd64.exe
-            **/README.md
-            **/LICENSE
+            release/bin/mohua-linux-amd64
+            release/bin/mohua-linux-arm64
+            release/bin/mohua-windows-amd64.exe
+            release/README.md
+            release/LICENSE
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
