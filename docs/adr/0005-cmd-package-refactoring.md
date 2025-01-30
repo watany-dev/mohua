@@ -1,76 +1,76 @@
-# 5. cmd パッケージのリファクタリング
+# 5. CMD Package Refactoring
 
 Date: 2025-01-30
 
 ## Status
 
-Accepted
+Processing
 
 ## Context
 
-cmd/root.goファイルには複数の責務が混在しており、テストカバレッジも不十分でした。具体的には：
+The cmd/root.go file contained multiple responsibilities with insufficient test coverage. Specifically:
 
-- コマンドライン引数の処理
-- SageMakerクライアントの初期化と設定検証
-- リソース（Endpoints, Notebooks, Studio apps）の並行取得
-- エラー処理とリトライロジック
-- 結果の表示処理
+- Command-line argument processing
+- SageMaker client initialization and configuration validation
+- Concurrent retrieval of resources (Endpoints, Notebooks, Studio apps)
+- Error handling and retry logic
+- Result display processing
 
-これらの責務を適切に分離し、テスト可能性を向上させる必要がありました。
+We needed to appropriately separate these responsibilities and improve testability.
 
 ## Decision
 
-段階的なリファクタリングアプローチを採用し、各ステップでテストを追加しながら進めることにしました。
+We adopted a phased refactoring approach, adding tests at each step.
 
-Phase 1: テストカバレッジの向上
-- cmd/root_test.goの作成
-- 基本実行のテスト
-- フラグ処理のテスト
-- エラーケースのテスト
+Phase 1: Improving Test Coverage [x]
+- Create cmd/root_test.go
+- Test basic execution
+- Test flag processing
+- Test error cases
 
-これにより、既存の機能を壊すことなくリファクタリングを進められる基盤を整備します。
+This establishes a foundation for refactoring without breaking existing functionality.
 
-Phase 2: 包括的なテストカバレッジの実装
-各ステップで以下の方針を採用：
-1. モック/スタブの作成
-2. テストケースの実装
-3. テストの実行と検証
-4. カバレッジの確認
-5. 必要に応じてリファクタリング
+Phase 2: Implementing Comprehensive Test Coverage
+Adopt the following approach for each step:
+1. Create mocks/stubs
+2. Implement test cases
+3. Execute and verify tests
+4. Confirm coverage
+5. Refactor as needed
 
-ステップ1: SageMakerクライアント関連のテスト
-- クライアント初期化のテスト（正常系/異常系）
-- ValidateConfiguration関数のテスト（リソースあり/なしのケース）
+Step 1: SageMaker Client Related Tests [x]
+- Test client initialization (normal/abnormal cases)
+- Test ValidateConfiguration function (with/without resources)
 
-ステップ2: リソース取得処理のテスト
-- 各リソースタイプ（Endpoints, Notebooks, Studio apps）の並行取得テスト
-- 空のリソース一覧を返すケース
-- リソースが存在する場合のケース
-- リトライ可能なエラーが発生した場合のケース
+Step 2: Display Processing Tests
+- Verify PrintHeader/PrintFooter call timing
+- Verify PrintNoResources call when no resources found
+- Test JSON format output
 
-ステップ3: 表示処理のテスト
-- PrintHeader/PrintFooterの呼び出しタイミングの検証
-- リソースが見つからない場合のPrintNoResourcesの呼び出し検証
-- JSONフォーマット出力のテスト
+Step 3: Resource Retrieval Tests
+- Test concurrent retrieval of each resource type (Endpoints, Notebooks, Studio apps)
+- Test cases with empty resource lists
+- Test cases with existing resources
+- Test cases with retriable errors
 
-ステップ4: エラーハンドリングのテスト
-- 複数のエラーが発生した場合の最初のエラー返却の検証
-- RetryableErrorの処理検証
-- エラーメッセージのフォーマット検証
+Step 4: Error Handling Tests
+- Verify first error return when multiple errors occur
+- Verify RetryableError processing
+- Verify error message formatting
 
 ## Consequences
 
 ### Positive
 
-- テストカバレッジが向上し、既存機能の動作保証が強化される
-- 段階的なアプローチにより、リスクを最小限に抑えられる
-- エラーケースの明確化により、より堅牢な実装が可能になる
+- Improved test coverage strengthens existing functionality guarantees
+- Phased approach minimizes risks
+- Clarifying error cases enables more robust implementation
 
 ### Negative
 
-- 追加のテストコードのメンテナンスが必要
-- テストの実行時間が増加
+- Additional test code maintenance required
+- Increased test execution time
 
 ### Neutral
 
-- テストファイルの追加により、プロジェクトサイズが増加
+- Project size increases with additional test files
