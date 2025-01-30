@@ -1,28 +1,19 @@
-# SageMaker Monitor
+# Mohua
 
-## Overview
-
-SageMaker Monitor is a lightweight and efficient CLI tool for monitoring AWS SageMaker compute resources and performing real-time cost analysis. This tool tracks the basic status and associated costs of the following SageMaker resources:
-
-- Endpoints
-- Notebook Instances
-- Studio Applications
+A CLI tool for real-time monitoring of AWS SageMaker resources and cost analysis.
 
 ## Key Features
 
-- 🔍 Basic resource state monitoring
-- 💰 Simplified cost analysis
+- 🔍 SageMaker Resource Monitoring
+  - Check status of Endpoints, Notebook Instances, and Studio Applications
+  - Fast resource information retrieval through parallel processing
+- 💰 Cost Analysis
   - Current cumulative costs
   - Hourly costs
   - Monthly projected costs
-- 📊 Flexible output formats (Table/JSON)
-
-## Important Notes
-
-This tool is a lightweight implementation focused on basic monitoring and estimated cost calculation for SageMaker resources:
-- Endpoint instance types are simplified and do not retrieve detailed configuration information
-- Notebook instance volume size information is omitted
-- For more detailed information, please check the AWS Console
+- 📊 Flexible Output Formats
+  - Color-coded table view (default)
+  - JSON output
 
 ## Prerequisites
 
@@ -32,34 +23,22 @@ This tool is a lightweight implementation focused on basic monitoring and estima
 
 ## Installation
 
-### Method 1: Build from Source
-
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/mohua.git
+git clone https://github.com/watany-dev/mohua.git
 cd mohua
 
-# Install dependencies
-go mod tidy
-
-# Build
-go build -o mohua
-
-# Optional: Install
-go install
+# Build and install
+make
 ```
-
-### Method 2: Download Binary
-
-Download the latest binary from the [Releases](https://github.com/yourusername/mohua/releases) page.
 
 ## Usage
 
-### Basic Usage
+Basic usage examples:
 
 ```bash
 # Display in table format
-./mohua --region us-east-1
+./mohua
 
 # Output in JSON format
 ./mohua --region us-east-1 --json
@@ -67,69 +46,22 @@ Download the latest binary from the [Releases](https://github.com/yourusername/m
 
 ### Command Line Options
 
-- `--region, -r`: Specify AWS region (required)
+- `--region, -r`: Specify AWS region
 - `--json, -j`: Output in JSON format
 
-## Environment Configuration
+## Output Example
 
-AWS credentials can be configured using one of the following methods:
-
-1. AWS CLI configuration
-```bash
-aws configure
+```text
+Type            Name               Status     Instance      Running Time
+Endpoint        ml-endpoint        InService  ml.t3.medium  72h 15m 
+Notebook        dev-notebook       Running    ml.t3.medium  168h 30m
 ```
 
-2. Environment variables
-```bash
-export AWS_ACCESS_KEY_ID=your_access_key
-export AWS_SECRET_ACCESS_KEY=your_secret_key
-export AWS_DEFAULT_REGION=us-east-1
-```
+## Additional Information
 
-3. IAM role (EC2 or ECS)
-
-## Output Examples
-
-### Table Format
-```
-Type            Name                          Status     Instance       Running Time  Hourly($)  Current($)  Projected($)
-Endpoint        my-ml-endpoint                InService  unknown        72h 15m       $1.24      $89.54      $912.80
-Notebook        dev-notebook                  Running    ml.t3.medium   168h 30m      $0.11      $18.54      $81.40
-
-Total Current Cost: $108.08    Projected Monthly Cost: $994.20
-```
-
-### JSON Format
-```json
-[
-  {
-    "resourceType": "Endpoint",
-    "name": "my-ml-endpoint",
-    "status": "InService",
-    "instanceType": "unknown",
-    "runningTime": "72h 15m",
-    "hourlyCost": 1.24,
-    "currentCost": 89.54,
-    "projectedMonthlyCost": 912.80
-  },
-  ...
-]
-```
-
-## Troubleshooting
-
-- AWS authentication error: Check IAM policies and permissions
-- Region specification error: Use the correct region name
-- Unexpected results: Verify AWS SDK version
-
-## Contributing
-
-Pull requests and feature suggestions are welcome. See `CONTRIBUTING.md` for details.
+- Refer to [ADR](docs/adr/) for architecture and design details
+- This tool provides estimated cost calculations. Verify exact billing in the AWS Console
 
 ## License
 
-This project is published under the [MIT License](LICENSE).
-
-## Disclaimer
-
-This tool is for informational purposes only. Always verify billing information through the AWS Console. Cost calculations are approximate and may differ from actual billing amounts.
+[MIT License](LICENSE)

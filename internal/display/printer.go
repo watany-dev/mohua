@@ -89,7 +89,7 @@ func (p *Printer) printTableResource(info ResourceInfo) {
 		status = colorFunc(status)
 	}
 
-	fmt.Printf("%-15s %-30s %-12s %-15s %-15s\n",
+	fmt.Fprintf(p.output, "%-15s %-30s %-12s %-15s %-15s\n",
 		info.ResourceType,
 		truncateString(info.Name, 29),
 		status,
@@ -104,6 +104,40 @@ func (p *Printer) PrintFooter() {
 		fmt.Fprint(p.output, "\n]\n")
 	} else {
 		fmt.Fprintln(p.output, strings.Repeat("-", 120))
+	}
+}
+
+// PrintNoResources handles the case when no resources are found
+func (p *Printer) PrintNoResources(region string) {
+	if p.useJSON {
+		// Create a JSON object with metadata about no resources
+		noResourcesJSON := struct {
+			Resources []interface{} `json:"resources"`
+			Metadata  struct {
+				Region  string `json:"region"`
+				Message string `json:"message"`
+			} `json:"metadata"`
+		}{
+			Resources: []interface{}{},
+			Metadata: struct {
+				Region  string `json:"region"`
+				Message string `json:"message"`
+			}{
+				Region:  region,
+				Message: "No resources found",
+			},
+		}
+
+		jsonData, err := json.MarshalIndent(noResourcesJSON, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error marshaling JSON: %v\n", err)
+			return
+		}
+		fmt.Fprintln(p.output, string(jsonData))
+	} else {
+		// Use color for the no resources message in table format
+		noResourceMsg := color.New(color.FgYellow).SprintfFunc()
+		fmt.Fprintf(p.output, "%s\n", noResourceMsg("No SageMaker resources found in region %s", region))
 	}
 }
 

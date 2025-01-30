@@ -1,4 +1,6 @@
-# Code Quality Rules
+# Rules
+
+## Code Quality Rules
 
 1. Test Coverage:
    - Before attempting completion, always make sure that any code changes have test coverage
@@ -10,7 +12,12 @@
    - Prefer fixing the underlying issue over disabling the lint rule
    - Document any approved lint rule disabling with a comment explaining the reason
 
-# Plan Mode Rules
+3. Design Rules:
+   - Refer to doc/adr for design.
+   - Respect existing code, no needless refactoring.
+
+
+## Plan Mode Rules
 
 1. Then they use Plan mode to:
 
