@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sagemaker/types"
 	"github.com/aws/smithy-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestNewClient(t *testing.T) {
@@ -33,40 +34,18 @@ func TestNewClient(t *testing.T) {
 	os.Unsetenv("AWS_REGION")
 }
 
-// MockSageMakerClient provides a mock implementation of the SageMaker client
-type MockSageMakerClient struct {
-	listAppsFunc         func(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error)
-	listEndpointsFunc    func(ctx context.Context, params *sagemaker.ListEndpointsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListEndpointsOutput, error)
-	listNotebookFunc     func(ctx context.Context, params *sagemaker.ListNotebookInstancesInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListNotebookInstancesOutput, error)
-	listDomainsFunc      func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error)
-}
+func TestGetRegion(t *testing.T) {
+	// Test with explicit region
+	client, err := NewClient("us-west-2")
+	assert.NoError(t, err)
+	assert.Equal(t, "us-west-2", client.GetRegion())
 
-func (m *MockSageMakerClient) ListApps(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error) {
-	if m.listAppsFunc != nil {
-		return m.listAppsFunc(ctx, params, optFns...)
-	}
-	return &sagemaker.ListAppsOutput{}, nil
-}
-
-func (m *MockSageMakerClient) ListEndpoints(ctx context.Context, params *sagemaker.ListEndpointsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListEndpointsOutput, error) {
-	if m.listEndpointsFunc != nil {
-		return m.listEndpointsFunc(ctx, params, optFns...)
-	}
-	return &sagemaker.ListEndpointsOutput{}, nil
-}
-
-func (m *MockSageMakerClient) ListNotebookInstances(ctx context.Context, params *sagemaker.ListNotebookInstancesInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListNotebookInstancesOutput, error) {
-	if m.listNotebookFunc != nil {
-		return m.listNotebookFunc(ctx, params, optFns...)
-	}
-	return &sagemaker.ListNotebookInstancesOutput{}, nil
-}
-
-func (m *MockSageMakerClient) ListDomains(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
-	if m.listDomainsFunc != nil {
-		return m.listDomainsFunc(ctx, params, optFns...)
-	}
-	return &sagemaker.ListDomainsOutput{}, nil
+	// Test with AWS_REGION environment variable
+	os.Setenv("AWS_REGION", "us-east-1")
+	client, err = NewClient("")
+	assert.NoError(t, err)
+	assert.Equal(t, "us-east-1", client.GetRegion())
+	os.Unsetenv("AWS_REGION")
 }
 
 func TestListStudioApps_NilFields(t *testing.T) {
@@ -74,46 +53,47 @@ func TestListStudioApps_NilFields(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a mock client
-	mockClient := &MockSageMakerClient{
-		listAppsFunc: func(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error) {
-			return &sagemaker.ListAppsOutput{
-				Apps: []types.AppDetails{
-					{
-						// Intentionally leave some fields nil
-						Status:     types.AppStatusInService,
-						AppType:    types.AppTypeJupyterServer,
-						AppName:    nil,
-						CreationTime: nil,
-						UserProfileName: nil,
-						ResourceSpec: nil,
-					},
-					{
-						// Old Studio app with some fields populated
-						Status:     types.AppStatusInService,
-						AppType:    types.AppTypeJupyterServer,
-						AppName:    aws.String("TestApp"),
-						CreationTime: aws.Time(time.Now()),
-						UserProfileName: aws.String("TestUser"),
-						ResourceSpec: &types.ResourceSpec{
-							InstanceType: types.AppInstanceType("ml.t3.medium"),
-						},
-					},
-					{
-						// New Studio app with space name
-						Status:     types.AppStatusInService,
-						AppType:    types.AppTypeJupyterLab,
-						AppName:    aws.String("NewTestApp"),
-						CreationTime: aws.Time(time.Now()),
-						UserProfileName: aws.String("NewTestUser"),
-						SpaceName:   aws.String("TestSpace"),
-						ResourceSpec: &types.ResourceSpec{
-							InstanceType: types.AppInstanceType("ml.t3.large"),
-						},
+	mockClient := new(MockSageMakerClient)
+	now := time.Now()
+
+	// Setup mock expectations
+	mockClient.On("ListApps", ctx, &sagemaker.ListAppsInput{}, mock.Anything).
+		Return(&sagemaker.ListAppsOutput{
+			Apps: []types.AppDetails{
+				{
+					// Intentionally leave some fields nil
+					Status:     types.AppStatusInService,
+					AppType:    types.AppTypeJupyterServer,
+					AppName:    nil,
+					CreationTime: nil,
+					UserProfileName: nil,
+					ResourceSpec: nil,
+				},
+				{
+					// Old Studio app with some fields populated
+					Status:     types.AppStatusInService,
+					AppType:    types.AppTypeJupyterServer,
+					AppName:    aws.String("TestApp"),
+					CreationTime: aws.Time(now),
+					UserProfileName: aws.String("TestUser"),
+					ResourceSpec: &types.ResourceSpec{
+						InstanceType: types.AppInstanceType("ml.t3.medium"),
 					},
 				},
-			}, nil
-		},
-	}
+				{
+					// New Studio app with space name
+					Status:     types.AppStatusInService,
+					AppType:    types.AppTypeJupyterLab,
+					AppName:    aws.String("NewTestApp"),
+					CreationTime: aws.Time(now),
+					UserProfileName: aws.String("NewTestUser"),
+					SpaceName:   aws.String("TestSpace"),
+					ResourceSpec: &types.ResourceSpec{
+						InstanceType: types.AppInstanceType("ml.t3.large"),
+					},
+				},
+			},
+		}, nil)
 
 	// Create a Client with the mock
 	client := &Client{
@@ -151,31 +131,32 @@ func TestListStudioApps_StatusHandling(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a mock client with mixed statuses
-	mockClient := &MockSageMakerClient{
-		listAppsFunc: func(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error) {
-			return &sagemaker.ListAppsOutput{
-				Apps: []types.AppDetails{
-					{
-						// Running old Studio app
-						Status:     types.AppStatusInService,
-						AppType:    types.AppTypeJupyterServer,
-						AppName:    aws.String("RunningOldApp"),
-						CreationTime: aws.Time(time.Now()),
-						UserProfileName: aws.String("OldUser"),
-					},
-					{
-						// Stopped new Studio app
-						Status:     types.AppStatusDeleted,
-						AppType:    types.AppTypeJupyterLab,
-						AppName:    aws.String("StoppedNewApp"),
-						CreationTime: aws.Time(time.Now().Add(-1 * time.Hour)),
-						UserProfileName: aws.String("NewUser"),
-						SpaceName:   aws.String("StoppedSpace"),
-					},
+	mockClient := new(MockSageMakerClient)
+	now := time.Now()
+
+	// Setup mock expectations
+	mockClient.On("ListApps", ctx, &sagemaker.ListAppsInput{}, mock.Anything).
+		Return(&sagemaker.ListAppsOutput{
+			Apps: []types.AppDetails{
+				{
+					// Running old Studio app
+					Status:     types.AppStatusInService,
+					AppType:    types.AppTypeJupyterServer,
+					AppName:    aws.String("RunningOldApp"),
+					CreationTime: aws.Time(now),
+					UserProfileName: aws.String("OldUser"),
 				},
-			}, nil
-		},
-	}
+				{
+					// Stopped new Studio app
+					Status:     types.AppStatusDeleted,
+					AppType:    types.AppTypeJupyterLab,
+					AppName:    aws.String("StoppedNewApp"),
+					CreationTime: aws.Time(now.Add(-1 * time.Hour)),
+					UserProfileName: aws.String("NewUser"),
+					SpaceName:   aws.String("StoppedSpace"),
+				},
+			},
+		}, nil)
 
 	// Create a Client with the mock
 	client := &Client{
@@ -201,44 +182,51 @@ func TestConcurrentResourceListing(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a mock client with simulated delays
-	mockClient := &MockSageMakerClient{
-		listEndpointsFunc: func(ctx context.Context, params *sagemaker.ListEndpointsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListEndpointsOutput, error) {
+	mockClient := new(MockSageMakerClient)
+	now := time.Now()
+
+	// Setup mock expectations with delays
+	mockClient.On("ListEndpoints", ctx, &sagemaker.ListEndpointsInput{}, mock.Anything).
+		Run(func(args mock.Arguments) {
 			time.Sleep(100 * time.Millisecond) // Simulate some delay
-			return &sagemaker.ListEndpointsOutput{
-				Endpoints: []types.EndpointSummary{
-					{
-						EndpointName:     aws.String("Endpoint1"),
-						EndpointStatus:   types.EndpointStatusInService,
-						CreationTime:     aws.Time(time.Now().Add(-1 * time.Hour)),
-					},
+		}).
+		Return(&sagemaker.ListEndpointsOutput{
+			Endpoints: []types.EndpointSummary{
+				{
+					EndpointName:   aws.String("Endpoint1"),
+					EndpointStatus: types.EndpointStatusInService,
+					CreationTime:   aws.Time(now.Add(-1 * time.Hour)),
 				},
-			}, nil
-		},
-		listNotebookFunc: func(ctx context.Context, params *sagemaker.ListNotebookInstancesInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListNotebookInstancesOutput, error) {
+			},
+		}, nil)
+
+	mockClient.On("ListNotebookInstances", ctx, &sagemaker.ListNotebookInstancesInput{}, mock.Anything).
+		Run(func(args mock.Arguments) {
 			time.Sleep(50 * time.Millisecond) // Simulate some delay
-			return &sagemaker.ListNotebookInstancesOutput{
-				NotebookInstances: []types.NotebookInstanceSummary{
-					{
-						NotebookInstanceName:     aws.String("Notebook1"),
-						NotebookInstanceStatus:   types.NotebookInstanceStatusInService,
-						CreationTime:             aws.Time(time.Now().Add(-2 * time.Hour)),
-					},
+		}).
+		Return(&sagemaker.ListNotebookInstancesOutput{
+			NotebookInstances: []types.NotebookInstanceSummary{
+				{
+					NotebookInstanceName:   aws.String("Notebook1"),
+					NotebookInstanceStatus: types.NotebookInstanceStatusInService,
+					CreationTime:           aws.Time(now.Add(-2 * time.Hour)),
 				},
-			}, nil
-		},
-		listAppsFunc: func(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error) {
+			},
+		}, nil)
+
+	mockClient.On("ListApps", ctx, &sagemaker.ListAppsInput{}, mock.Anything).
+		Run(func(args mock.Arguments) {
 			time.Sleep(75 * time.Millisecond) // Simulate some delay
-			return &sagemaker.ListAppsOutput{
-				Apps: []types.AppDetails{
-					{
-						AppName:     aws.String("App1"),
-						Status:      types.AppStatusInService,
-						CreationTime: aws.Time(time.Now().Add(-3 * time.Hour)),
-					},
+		}).
+		Return(&sagemaker.ListAppsOutput{
+			Apps: []types.AppDetails{
+				{
+					AppName:      aws.String("App1"),
+					Status:       types.AppStatusInService,
+					CreationTime: aws.Time(now.Add(-3 * time.Hour)),
 				},
-			}, nil
-		},
-	}
+			},
+		}, nil)
 
 	// Create a Client with the mock
 	client := &Client{
@@ -294,39 +282,33 @@ func TestValidateConfiguration(t *testing.T) {
 	ctx := context.Background()
 
 	// Test case 1: Successful configuration
-	mockClientSuccess := &MockSageMakerClient{
-		listDomainsFunc: func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
-			return &sagemaker.ListDomainsOutput{}, nil
-		},
-	}
+	mockClientSuccess := new(MockSageMakerClient)
+	mockClientSuccess.On("ListDomains", ctx, &sagemaker.ListDomainsInput{MaxResults: aws.Int32(1)}, mock.Anything).
+		Return(&sagemaker.ListDomainsOutput{}, nil)
 	clientSuccess := &Client{client: mockClientSuccess}
 	hasResources, err := clientSuccess.ValidateConfiguration(ctx)
 	assert.NoError(t, err)
 	assert.True(t, hasResources)
 
 	// Test case 2: Access Denied
-	mockClientAccessDenied := &MockSageMakerClient{
-		listDomainsFunc: func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
-			return nil, &smithy.GenericAPIError{
-				Code:    "AccessDeniedException",
-				Message: "Access Denied",
-			}
-		},
-	}
+	mockClientAccessDenied := new(MockSageMakerClient)
+	mockClientAccessDenied.On("ListDomains", ctx, &sagemaker.ListDomainsInput{MaxResults: aws.Int32(1)}, mock.Anything).
+		Return(nil, &smithy.GenericAPIError{
+			Code:    "AccessDeniedException",
+			Message: "Access Denied",
+		})
 	clientAccessDenied := &Client{client: mockClientAccessDenied}
 	hasResources, err = clientAccessDenied.ValidateConfiguration(ctx)
 	assert.NoError(t, err)
 	assert.False(t, hasResources)
 
 	// Test case 3: Invalid Token
-	mockClientInvalidToken := &MockSageMakerClient{
-		listDomainsFunc: func(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {
-			return nil, &smithy.GenericAPIError{
-				Code:    "InvalidClientTokenId",
-				Message: "Invalid Token",
-			}
-		},
-	}
+	mockClientInvalidToken := new(MockSageMakerClient)
+	mockClientInvalidToken.On("ListDomains", ctx, &sagemaker.ListDomainsInput{MaxResults: aws.Int32(1)}, mock.Anything).
+		Return(nil, &smithy.GenericAPIError{
+			Code:    "InvalidClientTokenId",
+			Message: "Invalid Token",
+		})
 	clientInvalidToken := &Client{client: mockClientInvalidToken}
 	hasResources, err = clientInvalidToken.ValidateConfiguration(ctx)
 	assert.NoError(t, err)

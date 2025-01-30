@@ -2,6 +2,7 @@ package sagemaker
 
 import (
 	"errors"
+	"net"
 	"strings"
 
 	"github.com/aws/smithy-go"
@@ -68,7 +69,17 @@ func WrapError(err error) error {
 
 // isNetworkError checks if the error is a network-related error
 func isNetworkError(err error) bool {
-	// Add common network error types or error message patterns
+	if err == nil {
+		return false
+	}
+
+	// Check for specific network error types
+	var netErr *net.OpError
+	if errors.As(err, &netErr) {
+		return true
+	}
+
+	// Check common network error message patterns
 	networkErrorMessages := []string{
 		"connection refused",
 		"connection reset",
