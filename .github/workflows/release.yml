@@ -69,19 +69,15 @@ jobs:
         run: choco install upx
 
       - name: Build
-        shell: bash # for Windows 
+        shell: bash  # For Windows
         run: |
           VERSION=$(git describe --tags --always)
           COMMIT=$(git rev-parse HEAD)
           BUILD_DATE=$(date -u '+%Y-%m-%d')
           LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}"
-
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
-          else
-            GOOS=linux GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
-          fi
-
+      
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="${LDFLAGS}" -o ${{ matrix.output-name }}
+      
           upx --best --lzma ${{ matrix.output-name }}
 
       - name: Prepare release directory
@@ -116,11 +112,10 @@ jobs:
           files: |
             **/bin/mohua-linux-amd64
             **/bin/mohua-linux-arm64
-            **/bin/mohua-darwin-amd64
-            **/bin/mohua-darwin-arm64
             **/bin/mohua-windows-amd64.exe
             **/bin/mohua-windows-arm64.exe
             **/README.md
             **/LICENSE
+
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
