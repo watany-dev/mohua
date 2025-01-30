@@ -10,7 +10,7 @@ concurrency: release-${{ github.ref }}
 jobs:
   build-release:
     name: Build & Upload Artifacts
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -115,6 +115,5 @@ jobs:
             **/configs/pricing.yaml
             **/README.md
             **/LICENSE
-
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
