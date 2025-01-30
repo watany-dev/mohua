@@ -5,6 +5,8 @@ on:
     tags:
       - 'v*'
 
+concurrency: release-${{ github.ref }}
+
 jobs:
   build-release:
     name: Build & Upload Artifacts
