@@ -38,11 +38,19 @@ build: install-upx
 	upx --best --lzma $(BINARY_NAME)
 	@echo "Build complete"
 
-# Run tests
+# Run only unit tests (default)
 test:
-	$(GOTEST) -v ./...
+	$(GOTEST) -v -tags=!integration ./...
 
-# Run tests with coverage
+# Run integration tests (requires AWS credentials)
+test-integ:
+	$(GOTEST) -v -tags=integration ./...
+
+# Run all tests (both unit and integration)
+test-all:
+	$(GOTEST) -v ./... -tags=integration
+
+# Run tests with coverage (unit tests only)
 cover:
 	$(GOTEST) -coverprofile=coverage.out ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
