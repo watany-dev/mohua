@@ -17,8 +17,5 @@ jobs:
         with:
           go-version: 1.23.x
 
-      - name: Install dependencies
-        run: go mod download
-
-      - name: Test
+      - name: Install dependencies & test
         run: make test
