@@ -1,35 +1,29 @@
 # Mohua
 
-A CLI tool for real-time monitoring of AWS SageMaker resources and cost analysis.
+Mohua is `Machine Learning Observation HUman in AWS.`
+
+A CLI tool for monitoring the status of AWS SageMaker resources.
 
 ## Key Features
 
 - 🔍 SageMaker Resource Monitoring
   - Check status of Endpoints, Notebook Instances, and Studio Applications
   - Fast resource information retrieval through parallel processing
-- 💰 Cost Analysis
-  - Current cumulative costs
-  - Hourly costs
-  - Monthly projected costs
 - 📊 Flexible Output Formats
   - Color-coded table view (default)
   - JSON output
 
 ## Prerequisites
 
-- Go 1.16 or higher
+- Go 1.23 or higher
 - AWS CLI configured
 - AWS IAM access permissions
 
 ## Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/watany-dev/mohua.git
-cd mohua
-
-# Build and install
-make
+curl -fsSL https://raw.githubusercontent.com/watany-dev/mohua/main/install.sh | sh
+mohua -h
 ```
 
 ## Usage
