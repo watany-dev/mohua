@@ -79,7 +79,7 @@ func TestMockSageMakerClientBasic(t *testing.T) {
 		}, nil)
 
 	// Execute tests
-	client := &Client{client: mockClient}
+	client := &clientImpl{client: mockClient}
 
 	// Test ValidateConfiguration
 	hasResources, err := client.ValidateConfiguration(ctx)
