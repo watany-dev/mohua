@@ -96,7 +96,7 @@ func TestListStudioApps_NilFields(t *testing.T) {
 		}, nil)
 
 	// Create a Client with the mock
-	client := &Client{
+	client := &clientImpl{
 		client: mockClient,
 	}
 
@@ -159,7 +159,7 @@ func TestListStudioApps_StatusHandling(t *testing.T) {
 		}, nil)
 
 	// Create a Client with the mock
-	client := &Client{
+	client := &clientImpl{
 		client: mockClient,
 	}
 
@@ -229,7 +229,7 @@ func TestConcurrentResourceListing(t *testing.T) {
 		}, nil)
 
 	// Create a Client with the mock
-	client := &Client{
+	client := &clientImpl{
 		client: mockClient,
 	}
 
@@ -285,7 +285,7 @@ func TestValidateConfiguration(t *testing.T) {
 	mockClientSuccess := new(MockSageMakerClient)
 	mockClientSuccess.On("ListDomains", ctx, &sagemaker.ListDomainsInput{MaxResults: aws.Int32(1)}, mock.Anything).
 		Return(&sagemaker.ListDomainsOutput{}, nil)
-	clientSuccess := &Client{client: mockClientSuccess}
+	clientSuccess := &clientImpl{client: mockClientSuccess}
 	hasResources, err := clientSuccess.ValidateConfiguration(ctx)
 	assert.NoError(t, err)
 	assert.True(t, hasResources)
@@ -297,7 +297,7 @@ func TestValidateConfiguration(t *testing.T) {
 			Code:    "AccessDeniedException",
 			Message: "Access Denied",
 		})
-	clientAccessDenied := &Client{client: mockClientAccessDenied}
+	clientAccessDenied := &clientImpl{client: mockClientAccessDenied}
 	hasResources, err = clientAccessDenied.ValidateConfiguration(ctx)
 	assert.NoError(t, err)
 	assert.False(t, hasResources)
@@ -309,7 +309,7 @@ func TestValidateConfiguration(t *testing.T) {
 			Code:    "InvalidClientTokenId",
 			Message: "Invalid Token",
 		})
-	clientInvalidToken := &Client{client: mockClientInvalidToken}
+	clientInvalidToken := &clientImpl{client: mockClientInvalidToken}
 	hasResources, err = clientInvalidToken.ValidateConfiguration(ctx)
 	assert.NoError(t, err)
 	assert.False(t, hasResources)

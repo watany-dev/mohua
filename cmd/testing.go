@@ -1,33 +1,46 @@
 package cmd
 
 import (
-	"os"
-	"testing"
+	"context"
+	"mohua/internal/sagemaker"
+	"github.com/stretchr/testify/mock"
 )
 
-// hasAWSCredentials checks if AWS credentials are available in the environment
-func hasAWSCredentials() bool {
-	// Check for explicit credentials
-	if os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
-		return true
-	}
-	
-	// Check for AWS_PROFILE
-	if os.Getenv("AWS_PROFILE") != "" {
-		return true
-	}
-	
-	// Check for AWS_ROLE_ARN
-	if os.Getenv("AWS_ROLE_ARN") != "" {
-		return true
-	}
-	
-	return false
+// MockSageMakerClient is a mock implementation of the sagemaker.Client interface
+type MockSageMakerClient struct {
+	mock.Mock
 }
 
-// skipIfNoAWSCredentials skips the test if no AWS credentials are available
-func skipIfNoAWSCredentials(t *testing.T) {
-	if !hasAWSCredentials() {
-		t.Skip("Skipping test that requires AWS credentials")
+func (m *MockSageMakerClient) ValidateConfiguration(ctx context.Context) (bool, error) {
+	args := m.Called(ctx)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockSageMakerClient) ListEndpoints(ctx context.Context) ([]sagemaker.ResourceInfo, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
 	}
+	return args.Get(0).([]sagemaker.ResourceInfo), args.Error(1)
+}
+
+func (m *MockSageMakerClient) ListNotebooks(ctx context.Context) ([]sagemaker.ResourceInfo, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]sagemaker.ResourceInfo), args.Error(1)
+}
+
+func (m *MockSageMakerClient) ListStudioApps(ctx context.Context) ([]sagemaker.ResourceInfo, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]sagemaker.ResourceInfo), args.Error(1)
+}
+
+func (m *MockSageMakerClient) GetRegion() string {
+	args := m.Called()
+	return args.String(0)
 }

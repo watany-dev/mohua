@@ -1,3 +1,4 @@
+
 package cmd
 
 import (
@@ -24,13 +25,20 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "mohua",
-	Short: "Monitor AWS SageMaker compute resources and their costs",
+	Use:                        "mohua",
+	Short:                      "Monitor AWS SageMaker compute resources and their costs",
 	Long: `A monitoring tool for AWS SageMaker that helps track running compute resources
 and their associated costs.`,
+	SilenceUsage:                    true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cmd.SilenceUsage = true
-		return runMonitor()
+
+		// Create SageMaker client
+		client, err := sagemaker.NewClient(region)
+		if err != nil {
+			return fmt.Errorf("failed to create SageMaker client: %w", err)
+		}
+
+		return runMonitor(client)
 	},
 }
 
@@ -42,13 +50,7 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
-func runMonitor() error {
-	// Create SageMaker client
-	client, err := sagemaker.NewClient(region)
-	if err != nil {
-		return fmt.Errorf("failed to create SageMaker client: %w", err)
-	}
-
+func runMonitor(client sagemaker.Client) error {
 	ctx := context.Background()
 
 	// Validate AWS configuration

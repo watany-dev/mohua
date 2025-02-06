@@ -14,7 +14,16 @@ import (
 	"mohua/internal/retry"
 )
 
-// SageMakerClientInterface defines the methods used by Client
+// Client interface defines the methods that consumers of this package can use
+type Client interface {
+	ValidateConfiguration(ctx context.Context) (bool, error)
+	ListEndpoints(ctx context.Context) ([]ResourceInfo, error)
+	ListNotebooks(ctx context.Context) ([]ResourceInfo, error)
+	ListStudioApps(ctx context.Context) ([]ResourceInfo, error)
+	GetRegion() string
+}
+
+// SageMakerClientInterface defines the AWS SDK methods used by Client
 type SageMakerClientInterface interface {
 	ListApps(ctx context.Context, params *sagemaker.ListAppsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListAppsOutput, error)
 	ListEndpoints(ctx context.Context, params *sagemaker.ListEndpointsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListEndpointsOutput, error)
@@ -22,14 +31,20 @@ type SageMakerClientInterface interface {
 	ListDomains(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error)
 }
 
-// Client implements only the necessary SageMaker API operations
-type Client struct {
+// clientImpl implements only the necessary SageMaker API operations
+type clientImpl struct {
 	client SageMakerClientInterface
 	region string
 }
 
-// NewClient creates a new SageMaker client
-func NewClient(region string) (*Client, error) {
+// NewClientFunc is the type for the client creation function
+type NewClientFunc func(region string) (Client, error)
+
+// NewClient is the function used to create a new SageMaker client
+var NewClient NewClientFunc = newClient
+
+// newClient creates a new SageMaker client
+func newClient(region string) (Client, error) {
 	var opts []func(*config.LoadOptions) error
 	
 	// If region is provided, use it; otherwise, let AWS SDK handle region selection
@@ -49,14 +64,14 @@ func NewClient(region string) (*Client, error) {
 	}
 	// fmt.Fprintf(os.Stderr, "Using AWS region: %s\n", effectiveRegion)
 
-	return &Client{
+	return &clientImpl{
 		client: sagemaker.NewFromConfig(cfg),
 		region: cfg.Region,
 	}, nil
 }
 
 // ValidateConfiguration checks if the AWS configuration is valid and resources are likely to exist
-func (c *Client) ValidateConfiguration(ctx context.Context) (bool, error) {
+func (c *clientImpl) ValidateConfiguration(ctx context.Context) (bool, error) {
 	// Check if we can list domains as a lightweight way to validate configuration
 	input := &sagemaker.ListDomainsInput{
 		MaxResults: aws.Int32(1), // We only need to check if we can list
@@ -83,7 +98,7 @@ func (c *Client) ValidateConfiguration(ctx context.Context) (bool, error) {
 }
 
 // ListEndpoints returns only active endpoints
-func (c *Client) ListEndpoints(ctx context.Context) ([]ResourceInfo, error) {
+func (c *clientImpl) ListEndpoints(ctx context.Context) ([]ResourceInfo, error) {
 	var resources []ResourceInfo
 	
 	retrier := retry.NewRetrier(retry.DefaultConfig)
@@ -115,7 +130,7 @@ func (c *Client) ListEndpoints(ctx context.Context) ([]ResourceInfo, error) {
 }
 
 // ListNotebooks returns only running notebook instances
-func (c *Client) ListNotebooks(ctx context.Context) ([]ResourceInfo, error) {
+func (c *clientImpl) ListNotebooks(ctx context.Context) ([]ResourceInfo, error) {
 	var resources []ResourceInfo
 
 	retrier := retry.NewRetrier(retry.DefaultConfig)
@@ -147,11 +162,11 @@ func (c *Client) ListNotebooks(ctx context.Context) ([]ResourceInfo, error) {
 
 // ListStudioApps returns only running studio applications
 // GetRegion returns the configured region for the client
-func (c *Client) GetRegion() string {
+func (c *clientImpl) GetRegion() string {
 	return c.region
 }
 
-func (c *Client) ListStudioApps(ctx context.Context) ([]ResourceInfo, error) {
+func (c *clientImpl) ListStudioApps(ctx context.Context) ([]ResourceInfo, error) {
 	var resources []ResourceInfo
 
 	retrier := retry.NewRetrier(retry.DefaultConfig)
