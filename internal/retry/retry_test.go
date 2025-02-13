@@ -126,7 +126,7 @@ func TestRetrier_BackoffTiming(t *testing.T) {
 		InitialInterval:     50 * time.Millisecond,
 		MaxInterval:         500 * time.Millisecond,
 		Multiplier:          2.0,
-		RandomizationFactor: 0.1,
+		RandomizationFactor: 0.0,
 	}
 	retrier := NewRetrier(config)
 
