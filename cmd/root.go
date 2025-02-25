@@ -30,6 +30,7 @@ var rootCmd = &cobra.Command{
 	Long: `A monitoring tool for AWS SageMaker that helps track running compute resources
 and their associated costs.`,
 	SilenceUsage:                    true,
+	SilenceErrors:                   true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		// Create SageMaker client
